@@ -40,6 +40,7 @@ import { registerMcpConfigCommand } from './mcp/mcpConfigWriter';
 import { ActiveTargetStore, pickTarget, resolveEndpoint } from './data/activeTarget';
 import { showRunExplorerPanel } from './webviews/runExplorerPanel';
 import { registerLanguageModelTools } from './lm/tools';
+import { registerAddFolderDependencyCommand } from './commands/addFolderDependency';
 
 let projects = new Map<string, DagsterProject>();
 let output: vscode.OutputChannel;
@@ -187,6 +188,7 @@ export async function activate(context: vscode.ExtensionContext) {
   );
 
   registerLanguageModelTools(context, activeTargetStore, () => (getPrimaryProject() ? devServerStatus.getGraphqlUrl() : undefined));
+  registerAddFolderDependencyCommand(context, assetIndexStore);
 
   async function toggleAutomationFromTree(treeItem: { info?: PrimitiveRefInfo }, toggle: 'start' | 'stop'): Promise<void> {
     const info = treeItem?.info;

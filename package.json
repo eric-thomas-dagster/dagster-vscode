@@ -208,6 +208,11 @@
         "command": "dagsterPowerUser.setDefaultStatusInCode",
         "title": "Dagster: Set Default Status in Code",
         "category": "Dagster"
+      },
+      {
+        "command": "dagsterPowerUser.addFolderDependency",
+        "title": "Dagster: Add Dependency to Folder...",
+        "category": "Dagster"
       }
     ],
     "languageModelTools": [
@@ -322,6 +327,13 @@
         {
           "command": "dagsterPowerUser.openAssetInDagster",
           "when": "view == dagsterPowerUser.projectComponents && viewItem == dagsterAsset"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "dagsterPowerUser.addFolderDependency",
+          "when": "explorerResourceIsFolder",
+          "group": "7_modification"
         }
       ]
     },
