@@ -1,0 +1,324 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Brand tokens + dark-mode overrides carried over from Dagster Designer's
+ * frontend/src/index.css verbatim -- this *is* the Dagster look and feel
+ * (Blurple primary, the real Dagster+ near-black navy dark shell, and the
+ * ~150 hand-tuned pastel/gray dark-mode overrides for literal Tailwind
+ * classes used throughout ported components). Trimmed: the two Tauri
+ * desktop-shell-only rules (`html.tauri` transparency, `.titlebar-drag-region`)
+ * -- meaningless in a VS Code webview, not just inert.
+ */
+@layer base {
+  :root {
+    /* Dagster Brand Colors */
+    --background: 240 100% 98%; /* Dagster White #F7F7FF */
+    --foreground: 274 98% 10%; /* Dagster Black #1B0130 */
+
+    --muted: 213 24% 84%; /* Gray 300 #CDD5DF */
+    --muted-foreground: 217 17% 35%; /* Gray 600 #4B5565 */
+
+    --border: 213 24% 84%; /* Gray 300 #CDD5DF */
+
+    --primary: 246 68% 56%; /* Blurple #4F43DD */
+    --primary-foreground: 240 100% 98%; /* Dagster White */
+
+    --secondary: 246 87% 79%; /* Light Blurple #A7A0F8 */
+    --secondary-foreground: 274 98% 10%; /* Dagster Black */
+
+    --accent: 246 60% 41%; /* Deep Blurple #332AA6 */
+    --accent-foreground: 240 100% 98%; /* Dagster White */
+
+    --blurple: 246 68% 56%;
+    --deep-blurple: 246 60% 41%;
+    --light-blurple: 246 87% 79%;
+    --dagster-white: 240 100% 98%;
+    --gray-900: 216 34% 12%;
+    --gray-600: 217 17% 35%;
+    --gray-300: 213 24% 84%;
+
+    --dagster-black: 233 67% 5%;   /* #040614 */
+    --selected: 241 53% 22%;
+  }
+
+  .dark {
+    --background: 233 67% 5%;          /* real Dagster+ near-black navy #040614 */
+    --foreground: 240 60% 97%;         /* near-white */
+
+    --muted: 233 30% 16%;
+    --muted-foreground: 233 15% 65%;
+
+    --border: 233 30% 14%;
+
+    --primary: 246 87% 72%;             /* lighter blurple for contrast */
+    --primary-foreground: 233 67% 5%;
+
+    --secondary: 241 53% 20%;           /* selected/hover indigo, matches real UI */
+    --secondary-foreground: 240 60% 97%;
+
+    --accent: 246 68% 60%;
+    --accent-foreground: 240 60% 97%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+}
+
+.dark {
+  color-scheme: dark;
+}
+.dark .bg-white { @apply bg-[#0a0f24]; }
+.dark .bg-gray-50 { @apply bg-[#0a0f24]; }
+.dark .bg-gray-100 { @apply bg-[#10152e]; }
+.dark .text-gray-900 { @apply text-[#f5f5ff]; }
+.dark .text-gray-800 { @apply text-[#e4e4f5]; }
+.dark .text-gray-700 { @apply text-[#c7c7e3]; }
+.dark .text-gray-600 { @apply text-[#a6a6c9]; }
+.dark .text-gray-500 { @apply text-[#8686ab]; }
+.dark .text-gray-400 { @apply text-[#6a6a8d]; }
+.dark .border-gray-100 { @apply border-[#141a33]; }
+.dark .border-gray-200 { @apply border-[#1c2242]; }
+.dark .border-gray-300 { @apply border-[#262d52]; }
+.dark .hover\:bg-gray-50:hover { @apply bg-[#141a38]; }
+.dark .hover\:bg-gray-100:hover { @apply bg-[#141a38]; }
+.dark .hover\:text-gray-900:hover { @apply text-[#ffffff]; }
+.dark .component-icon-lucide { filter: invert(1) brightness(1.4); }
+.dark .hover\:text-gray-800:hover { @apply text-[#f5f5ff]; }
+.dark .hover\:text-gray-700:hover { @apply text-[#e4e4f5]; }
+.dark .hover\:text-gray-600:hover { @apply text-[#c7c7e3]; }
+
+.dark .bg-amber-100 { background-color: hsl(38 35% 11%); }
+.dark .bg-amber-50 { background-color: hsl(38 35% 11%); }
+.dark .bg-amber-50\/30 { background-color: hsl(38 35% 11%); }
+.dark .bg-amber-50\/50 { background-color: hsl(38 35% 11%); }
+.dark .bg-blue-100 { background-color: hsl(221 35% 11%); }
+.dark .bg-blue-50 { background-color: hsl(221 35% 11%); }
+.dark .bg-blue-50\/40 { background-color: hsl(221 35% 11%); }
+.dark .bg-blue-50\/50 { background-color: hsl(221 35% 11%); }
+.dark .bg-blue-50\/60 { background-color: hsl(221 35% 11%); }
+.dark .bg-blue-50\/70 { background-color: hsl(221 35% 11%); }
+.dark .bg-cyan-100 { background-color: hsl(189 35% 11%); }
+.dark .bg-cyan-50 { background-color: hsl(189 35% 11%); }
+.dark .bg-emerald-100 { background-color: hsl(152 35% 11%); }
+.dark .bg-emerald-50 { background-color: hsl(152 35% 11%); }
+.dark .bg-emerald-50\/40 { background-color: hsl(152 35% 11%); }
+.dark .bg-fuchsia-100 { background-color: hsl(292 35% 11%); }
+.dark .bg-green-100 { background-color: hsl(142 35% 11%); }
+.dark .bg-green-50 { background-color: hsl(142 35% 11%); }
+.dark .bg-indigo-100 { background-color: hsl(239 35% 11%); }
+.dark .bg-indigo-50 { background-color: hsl(239 35% 11%); }
+.dark .bg-indigo-50\/30 { background-color: hsl(239 35% 11%); }
+.dark .bg-indigo-50\/50 { background-color: hsl(239 35% 11%); }
+.dark .bg-indigo-50\/60 { background-color: hsl(239 35% 11%); }
+.dark .bg-indigo-50\/70 { background-color: hsl(239 35% 11%); }
+.dark .bg-orange-100 { background-color: hsl(25 35% 11%); }
+.dark .bg-orange-50 { background-color: hsl(25 35% 11%); }
+.dark .bg-pink-50 { background-color: hsl(330 35% 11%); }
+.dark .bg-purple-100 { background-color: hsl(271 35% 11%); }
+.dark .bg-purple-50 { background-color: hsl(271 35% 11%); }
+.dark .bg-red-50 { background-color: hsl(0 35% 11%); }
+.dark .bg-rose-50 { background-color: hsl(350 35% 11%); }
+.dark .bg-rose-50\/30 { background-color: hsl(350 35% 11%); }
+.dark .bg-rose-50\/70 { background-color: hsl(350 35% 11%); }
+.dark .bg-sky-100 { background-color: hsl(199 35% 11%); }
+.dark .bg-sky-100\/50 { background-color: hsl(199 35% 11%); }
+.dark .bg-sky-50 { background-color: hsl(199 35% 11%); }
+.dark .bg-sky-50\/60 { background-color: hsl(199 35% 11%); }
+.dark .bg-teal-50 { background-color: hsl(173 35% 11%); }
+.dark .bg-violet-100 { background-color: hsl(258 35% 11%); }
+.dark .bg-violet-50 { background-color: hsl(258 35% 11%); }
+.dark .bg-violet-50\/40 { background-color: hsl(258 35% 11%); }
+.dark .bg-yellow-100 { background-color: hsl(48 35% 11%); }
+.dark .bg-yellow-50 { background-color: hsl(48 35% 11%); }
+.dark .hover\:bg-amber-100:hover { background-color: hsl(38 35% 11%); }
+.dark .hover\:bg-amber-50:hover { background-color: hsl(38 35% 11%); }
+.dark .hover\:bg-amber-50\/30:hover { background-color: hsl(38 35% 11%); }
+.dark .hover\:bg-blue-100:hover { background-color: hsl(221 35% 11%); }
+.dark .hover\:bg-blue-200:hover { background-color: hsl(221 38% 16%); }
+.dark .hover\:bg-blue-300:hover { background-color: hsl(221 38% 16%); }
+.dark .hover\:bg-blue-50:hover { background-color: hsl(221 35% 11%); }
+.dark .hover\:bg-blue-50\/40:hover { background-color: hsl(221 35% 11%); }
+.dark .hover\:bg-emerald-50:hover { background-color: hsl(152 35% 11%); }
+.dark .hover\:bg-fuchsia-200:hover { background-color: hsl(292 38% 16%); }
+.dark .hover\:bg-green-100:hover { background-color: hsl(142 35% 11%); }
+.dark .hover\:bg-green-50:hover { background-color: hsl(142 35% 11%); }
+.dark .hover\:bg-indigo-100:hover { background-color: hsl(239 35% 11%); }
+.dark .hover\:bg-indigo-200:hover { background-color: hsl(239 38% 16%); }
+.dark .hover\:bg-indigo-50:hover { background-color: hsl(239 35% 11%); }
+.dark .hover\:bg-orange-100:hover { background-color: hsl(25 35% 11%); }
+.dark .hover\:bg-orange-200:hover { background-color: hsl(25 38% 16%); }
+.dark .hover\:bg-purple-100:hover { background-color: hsl(271 35% 11%); }
+.dark .hover\:bg-purple-50:hover { background-color: hsl(271 35% 11%); }
+.dark .hover\:bg-red-100:hover { background-color: hsl(0 35% 11%); }
+.dark .hover\:bg-red-50:hover { background-color: hsl(0 35% 11%); }
+.dark .hover\:bg-rose-50:hover { background-color: hsl(350 35% 11%); }
+.dark .hover\:bg-sky-100:hover { background-color: hsl(199 35% 11%); }
+.dark .hover\:bg-sky-200:hover { background-color: hsl(199 38% 16%); }
+.dark .hover\:bg-violet-100:hover { background-color: hsl(258 35% 11%); }
+.dark .hover\:bg-violet-50:hover { background-color: hsl(258 35% 11%); }
+.dark .border-amber-100 { border-color: hsl(38 30% 24%); }
+.dark .border-amber-200 { border-color: hsl(38 30% 24%); }
+.dark .border-amber-300 { border-color: hsl(38 30% 24%); }
+.dark .border-amber-50 { border-color: hsl(38 30% 24%); }
+.dark .border-blue-100 { border-color: hsl(221 30% 24%); }
+.dark .border-blue-200 { border-color: hsl(221 30% 24%); }
+.dark .border-blue-300 { border-color: hsl(221 30% 24%); }
+.dark .border-blue-50 { border-color: hsl(221 30% 24%); }
+.dark .border-cyan-300 { border-color: hsl(189 30% 24%); }
+.dark .border-emerald-100 { border-color: hsl(152 30% 24%); }
+.dark .border-emerald-200 { border-color: hsl(152 30% 24%); }
+.dark .border-emerald-300 { border-color: hsl(152 30% 24%); }
+.dark .border-emerald-50 { border-color: hsl(152 30% 24%); }
+.dark .border-fuchsia-300 { border-color: hsl(292 30% 24%); }
+.dark .border-green-200 { border-color: hsl(142 30% 24%); }
+.dark .border-green-300 { border-color: hsl(142 30% 24%); }
+.dark .border-green-50 { border-color: hsl(142 30% 24%); }
+.dark .border-indigo-100 { border-color: hsl(239 30% 24%); }
+.dark .border-indigo-200 { border-color: hsl(239 30% 24%); }
+.dark .border-indigo-300 { border-color: hsl(239 30% 24%); }
+.dark .border-orange-200 { border-color: hsl(25 30% 24%); }
+.dark .border-orange-300 { border-color: hsl(25 30% 24%); }
+.dark .border-purple-200 { border-color: hsl(271 30% 24%); }
+.dark .border-purple-300 { border-color: hsl(271 30% 24%); }
+.dark .border-purple-50 { border-color: hsl(271 30% 24%); }
+.dark .border-red-200 { border-color: hsl(0 30% 24%); }
+.dark .border-red-300 { border-color: hsl(0 30% 24%); }
+.dark .border-red-50 { border-color: hsl(0 30% 24%); }
+.dark .border-rose-200 { border-color: hsl(350 30% 24%); }
+.dark .border-rose-300 { border-color: hsl(350 30% 24%); }
+.dark .border-rose-50 { border-color: hsl(350 30% 24%); }
+.dark .border-sky-300 { border-color: hsl(199 30% 24%); }
+.dark .border-violet-200 { border-color: hsl(258 30% 24%); }
+.dark .border-yellow-200 { border-color: hsl(48 30% 24%); }
+.dark .border-yellow-300 { border-color: hsl(48 30% 24%); }
+.dark .hover\:border-blue-300:hover { border-color: hsl(221 30% 24%); }
+.dark .hover\:border-blue-50:hover { border-color: hsl(221 30% 24%); }
+.dark .hover\:border-green-50:hover { border-color: hsl(142 30% 24%); }
+.dark .hover\:border-indigo-300:hover { border-color: hsl(239 30% 24%); }
+.dark .hover\:border-indigo-50:hover { border-color: hsl(239 30% 24%); }
+.dark .hover\:border-purple-300:hover { border-color: hsl(271 30% 24%); }
+.dark .hover\:border-red-50:hover { border-color: hsl(0 30% 24%); }
+.dark .hover\:text-amber-800:hover { color: hsl(38 70% 82%); }
+.dark .hover\:text-amber-900:hover { color: hsl(38 70% 82%); }
+.dark .hover\:text-blue-600:hover { color: hsl(221 65% 72%); }
+.dark .hover\:text-blue-700:hover { color: hsl(221 65% 72%); }
+.dark .hover\:text-blue-800:hover { color: hsl(221 70% 82%); }
+.dark .hover\:text-blue-900:hover { color: hsl(221 70% 82%); }
+.dark .hover\:text-emerald-900:hover { color: hsl(152 70% 82%); }
+.dark .hover\:text-green-600:hover { color: hsl(142 65% 72%); }
+.dark .hover\:text-green-700:hover { color: hsl(142 65% 72%); }
+.dark .hover\:text-indigo-700:hover { color: hsl(239 65% 72%); }
+.dark .hover\:text-indigo-800:hover { color: hsl(239 70% 82%); }
+.dark .hover\:text-indigo-900:hover { color: hsl(239 70% 82%); }
+.dark .hover\:text-purple-600:hover { color: hsl(271 65% 72%); }
+.dark .hover\:text-purple-700:hover { color: hsl(271 65% 72%); }
+.dark .hover\:text-purple-900:hover { color: hsl(271 70% 82%); }
+.dark .hover\:text-red-600:hover { color: hsl(0 65% 72%); }
+.dark .hover\:text-red-700:hover { color: hsl(0 65% 72%); }
+.dark .hover\:text-red-800:hover { color: hsl(0 70% 82%); }
+.dark .hover\:text-rose-600:hover { color: hsl(350 65% 72%); }
+.dark .hover\:text-rose-900:hover { color: hsl(350 70% 82%); }
+.dark .text-amber-600 { color: hsl(38 65% 72%); }
+.dark .text-amber-700 { color: hsl(38 65% 72%); }
+.dark .text-amber-800 { color: hsl(38 70% 82%); }
+.dark .text-amber-900 { color: hsl(38 70% 82%); }
+.dark .text-blue-600 { color: hsl(221 65% 72%); }
+.dark .text-blue-700 { color: hsl(221 65% 72%); }
+.dark .text-blue-800 { color: hsl(221 70% 82%); }
+.dark .text-blue-800\/80 { color: hsl(221 70% 82%); }
+.dark .text-blue-900 { color: hsl(221 70% 82%); }
+.dark .text-cyan-700 { color: hsl(189 65% 72%); }
+.dark .text-emerald-600 { color: hsl(152 65% 72%); }
+.dark .text-emerald-700 { color: hsl(152 65% 72%); }
+.dark .text-emerald-700\/70 { color: hsl(152 65% 72%); }
+.dark .text-emerald-800 { color: hsl(152 70% 82%); }
+.dark .text-emerald-800\/70 { color: hsl(152 70% 82%); }
+.dark .text-emerald-900 { color: hsl(152 70% 82%); }
+.dark .text-emerald-900\/70 { color: hsl(152 70% 82%); }
+.dark .text-fuchsia-700 { color: hsl(292 65% 72%); }
+.dark .text-green-600 { color: hsl(142 65% 72%); }
+.dark .text-green-700 { color: hsl(142 65% 72%); }
+.dark .text-green-800 { color: hsl(142 70% 82%); }
+.dark .text-green-900 { color: hsl(142 70% 82%); }
+.dark .text-indigo-600 { color: hsl(239 65% 72%); }
+.dark .text-indigo-700 { color: hsl(239 65% 72%); }
+.dark .text-indigo-800 { color: hsl(239 70% 82%); }
+.dark .text-indigo-900 { color: hsl(239 70% 82%); }
+.dark .text-orange-600 { color: hsl(25 65% 72%); }
+.dark .text-orange-700 { color: hsl(25 65% 72%); }
+.dark .text-orange-800 { color: hsl(25 70% 82%); }
+.dark .text-orange-900 { color: hsl(25 70% 82%); }
+.dark .text-purple-600 { color: hsl(271 65% 72%); }
+.dark .text-purple-700 { color: hsl(271 65% 72%); }
+.dark .text-purple-800 { color: hsl(271 70% 82%); }
+.dark .text-purple-900 { color: hsl(271 70% 82%); }
+.dark .text-red-600 { color: hsl(0 65% 72%); }
+.dark .text-red-700 { color: hsl(0 65% 72%); }
+.dark .text-red-800 { color: hsl(0 70% 82%); }
+.dark .text-red-900 { color: hsl(0 70% 82%); }
+.dark .text-rose-600 { color: hsl(350 65% 72%); }
+.dark .text-rose-700 { color: hsl(350 65% 72%); }
+.dark .text-rose-800 { color: hsl(350 70% 82%); }
+.dark .text-rose-900 { color: hsl(350 70% 82%); }
+.dark .text-sky-700 { color: hsl(199 65% 72%); }
+.dark .text-sky-800 { color: hsl(199 70% 82%); }
+.dark .text-violet-700 { color: hsl(258 65% 72%); }
+.dark .text-yellow-600 { color: hsl(48 65% 72%); }
+.dark .text-yellow-700 { color: hsl(48 65% 72%); }
+.dark .text-yellow-800 { color: hsl(48 70% 82%); }
+.dark .text-yellow-900 { color: hsl(48 70% 82%); }
+.dark .bg-gray-50\/30 { background-color: #10152e; }
+.dark .bg-gray-50\/40 { background-color: #10152e; }
+.dark .bg-gray-50\/50 { background-color: #10152e; }
+.dark .hover\:bg-gray-50\/50:hover { background-color: #141a38; }
+.dark .bg-white\/20 { background-color: rgba(20, 26, 56, 0.55); }
+.dark .bg-white\/40 { background-color: rgba(16, 21, 46, 0.75); }
+.dark .bg-white\/50 { background-color: rgba(16, 21, 46, 0.85); }
+.dark .bg-white\/70 { background-color: #10152e; }
+.dark .bg-white\/80 { background-color: #10152e; }
+.dark .bg-white\/95 { background-color: #0a0f24; }
+.dark .hover\:bg-white\/30:hover { background-color: rgba(20, 26, 56, 0.7); }
+.dark .hover\:bg-white\/40:hover { background-color: rgba(20, 26, 56, 0.8); }
+
+.dark .to-blue-100 { --tw-gradient-stops: hsl(221 35% 11%); }
+.dark .to-blue-200 { --tw-gradient-stops: hsl(221 35% 11%); }
+.dark .to-blue-50 { --tw-gradient-stops: hsl(221 35% 11%); }
+.dark .to-fuchsia-50 { --tw-gradient-stops: hsl(292 35% 11%); }
+.dark .to-gray-50\/40 { --tw-gradient-stops: hsl(233 35% 11%); }
+.dark .to-gray-50\/50 { --tw-gradient-stops: hsl(233 35% 11%); }
+.dark .to-green-50 { --tw-gradient-stops: hsl(142 35% 11%); }
+.dark .to-indigo-50 { --tw-gradient-stops: hsl(239 35% 11%); }
+.dark .from-indigo-50.to-white {
+  --tw-gradient-stops: hsl(239 35% 11%) !important;
+  background-image: none !important;
+  background-color: hsl(239 35% 11%) !important;
+}
+.dark .from-indigo-50.to-white.hover\:from-indigo-100:hover,
+.dark .hover\:from-indigo-100:hover {
+  --tw-gradient-stops: hsl(239 38% 16%) !important;
+  background-image: none !important;
+  background-color: hsl(239 38% 16%) !important;
+}
+.dark .to-pink-50 { --tw-gradient-stops: hsl(330 35% 11%); }
+.dark .to-purple-50 { --tw-gradient-stops: hsl(271 35% 11%); }
+.dark .to-red-50 { --tw-gradient-stops: hsl(0 35% 11%); }
+.dark .to-slate-50 { --tw-gradient-stops: hsl(233 35% 11%); }
+.dark .to-teal-50 { --tw-gradient-stops: hsl(173 35% 11%); }
+.dark .to-yellow-50 { --tw-gradient-stops: hsl(48 35% 11%); }
+
+/* React Flow overrides */
+.react-flow__node {
+  @apply cursor-pointer;
+}
+
+.react-flow__node.selected {
+  @apply ring-2 ring-primary;
+}

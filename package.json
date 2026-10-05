@@ -1,0 +1,278 @@
+{
+  "name": "dagster-power-user",
+  "displayName": "Dagster Power User",
+  "description": "Standalone Dagster development in VS Code: asset/dbt lineage, hover & go-to-definition, dg check diagnostics, AI component authoring, and a dagster-expert assistant with MCP tool access. No external backend required.",
+  "version": "0.0.1",
+  "publisher": "dagsterlabs",
+  "private": true,
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "workspaceContains:**/dagster.yaml",
+    "workspaceContains:**/pyproject.toml",
+    "onCommand:dagsterPowerUser.scaffoldNewProject"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "dagsterPowerUser",
+          "title": "Dagster",
+          "icon": "resources/activity-bar-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "dagsterPowerUser": [
+        {
+          "type": "webview",
+          "id": "dagsterPowerUser.chat",
+          "name": "Dagster Expert"
+        },
+        {
+          "id": "dagsterPowerUser.projectComponents",
+          "name": "Project Components",
+          "visibility": "collapsed"
+        },
+        {
+          "id": "dagsterPowerUser.componentCatalog",
+          "name": "Community Components",
+          "visibility": "collapsed"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "dagsterPowerUser.showDetectedProjects",
+        "title": "Dagster: Show Detected Projects",
+        "category": "Dagster"
+      },
+      {
+        "command": "dagsterPowerUser.refreshProjectDetection",
+        "title": "Dagster: Refresh Project Detection",
+        "category": "Dagster"
+      },
+      {
+        "command": "dagsterPowerUser.showAssetLineage",
+        "title": "Dagster: Show Asset Lineage",
+        "category": "Dagster"
+      },
+      {
+        "command": "dagsterPowerUser.devServerMenu",
+        "title": "Dagster: Dev Server...",
+        "category": "Dagster"
+      },
+      {
+        "command": "dagsterPowerUser.refreshAssetIndex",
+        "title": "Dagster: Refresh Asset Index",
+        "category": "Dagster"
+      },
+      {
+        "command": "dagsterPowerUser.runDgCheck",
+        "title": "Dagster: Run dg check defs",
+        "category": "Dagster"
+      },
+      {
+        "command": "dagsterPowerUser.setAnthropicApiKey",
+        "title": "Dagster: Set Anthropic API Key",
+        "category": "Dagster"
+      },
+      {
+        "command": "dagsterPowerUser.setOpenAiApiKey",
+        "title": "Dagster: Set OpenAI API Key",
+        "category": "Dagster"
+      },
+      {
+        "command": "dagsterPowerUser.scaffoldNewProject",
+        "title": "Dagster: Scaffold New Project",
+        "category": "Dagster"
+      },
+      {
+        "command": "dagsterPowerUser.searchComponentCatalog",
+        "title": "Dagster: Search Component Catalog",
+        "category": "Dagster"
+      },
+      {
+        "command": "dagsterPowerUser.materializeAssetSearch",
+        "title": "Dagster: Materialize Asset...",
+        "category": "Dagster"
+      },
+      {
+        "command": "dagsterPowerUser.launchJobSearch",
+        "title": "Dagster: Launch Job...",
+        "category": "Dagster"
+      },
+      {
+        "command": "dagsterPowerUser.searchDocs",
+        "title": "Dagster: Search Docs",
+        "category": "Dagster"
+      },
+      {
+        "command": "dagsterPowerUser.scaffoldGithubActions",
+        "title": "Dagster: Scaffold GitHub Actions",
+        "category": "Dagster"
+      },
+      {
+        "command": "dagsterPowerUser.newChatSession",
+        "title": "Dagster: New Chat Session",
+        "category": "Dagster"
+      },
+      {
+        "command": "dagsterPowerUser.showChatHistory",
+        "title": "Dagster: Show Chat History",
+        "category": "Dagster"
+      },
+      {
+        "command": "dagsterPowerUser.showMoreActions",
+        "title": "Dagster: More Actions...",
+        "category": "Dagster"
+      },
+      {
+        "command": "dagsterPowerUser.setDagsterPlusCredentials",
+        "title": "Dagster: Connect Dagster+...",
+        "category": "Dagster"
+      },
+      {
+        "command": "dagsterPowerUser.showDagsterPlusUsage",
+        "title": "Dagster: Show Dagster+ Usage",
+        "category": "Dagster"
+      },
+      {
+        "command": "dagsterPowerUser.fixDiagnosticWithAi",
+        "title": "Dagster: Ask Dagster Expert to Fix This",
+        "category": "Dagster"
+      },
+      {
+        "command": "dagsterPowerUser.manageAutomations",
+        "title": "Dagster: Manage Schedules & Sensors",
+        "category": "Dagster"
+      },
+      {
+        "command": "dagsterPowerUser.setupDagsterPlusMcp",
+        "title": "Dagster: Set Up Dagster+ MCP Server",
+        "category": "Dagster"
+      },
+      {
+        "command": "dagsterPowerUser.switchTarget",
+        "title": "Dagster: Switch Target (Local / Remote)...",
+        "category": "Dagster"
+      },
+      {
+        "command": "dagsterPowerUser.materializeAssetFromTree",
+        "title": "Materialize Asset",
+        "category": "Dagster",
+        "icon": "$(play)"
+      },
+      {
+        "command": "dagsterPowerUser.launchJobFromTree",
+        "title": "Launch Job",
+        "category": "Dagster",
+        "icon": "$(play)"
+      },
+      {
+        "command": "dagsterPowerUser.startAutomationFromTree",
+        "title": "Start",
+        "category": "Dagster",
+        "icon": "$(debug-start)"
+      },
+      {
+        "command": "dagsterPowerUser.stopAutomationFromTree",
+        "title": "Stop",
+        "category": "Dagster",
+        "icon": "$(debug-pause)"
+      },
+      {
+        "command": "dagsterPowerUser.showLoadError",
+        "title": "Dagster: Show Load Error",
+        "category": "Dagster"
+      }
+    ],
+    "menus": {
+      "view/item/context": [
+        {
+          "command": "dagsterPowerUser.materializeAssetFromTree",
+          "when": "view == dagsterPowerUser.projectComponents && viewItem == dagsterAsset",
+          "group": "inline"
+        },
+        {
+          "command": "dagsterPowerUser.launchJobFromTree",
+          "when": "view == dagsterPowerUser.projectComponents && viewItem == dagsterjob",
+          "group": "inline"
+        },
+        {
+          "command": "dagsterPowerUser.startAutomationFromTree",
+          "when": "view == dagsterPowerUser.projectComponents && (viewItem == dagsterscheduleStopped || viewItem == dagstersensorStopped)",
+          "group": "inline"
+        },
+        {
+          "command": "dagsterPowerUser.stopAutomationFromTree",
+          "when": "view == dagsterPowerUser.projectComponents && (viewItem == dagsterscheduleRunning || viewItem == dagstersensorRunning)",
+          "group": "inline"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Dagster Power User",
+      "properties": {
+        "dagsterPowerUser.dgPath": {
+          "type": "string",
+          "default": "",
+          "description": "Override path to the `dg` CLI executable. Leave blank to resolve from PATH (or the active Python interpreter's environment)."
+        },
+        "dagsterPowerUser.devServerUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Override the dg dev/dagster dev GraphQL endpoint. Leave blank to use http://localhost:3000/graphql."
+        },
+        "dagsterPowerUser.aiProvider": {
+          "type": "string",
+          "enum": [
+            "anthropic",
+            "openai"
+          ],
+          "default": "anthropic",
+          "description": "LLM provider for the AI planner and Dagster Expert assistant."
+        },
+        "dagsterPowerUser.aiModel": {
+          "type": "string",
+          "default": "",
+          "description": "Override the model id. Leave blank for the default (claude-sonnet-5 for Anthropic)."
+        },
+        "dagsterPowerUser.dagsterPlusOrg": {
+          "type": "string",
+          "default": "",
+          "description": "Dagster+ organization slug (e.g. \"my-org\" from my-org.dagster.cloud). The API token itself is set separately via 'Dagster: Connect Dagster+...' and stored securely, never here."
+        },
+        "dagsterPowerUser.dagsterPlusDeployment": {
+          "type": "string",
+          "default": "",
+          "description": "Override the Dagster+ deployment name to query. Leave blank to use \"prod\"."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build:webview": "npm run build --prefix webview-ui",
+    "compile": "node esbuild.js && npm run build:webview",
+    "watch": "node esbuild.js --watch",
+    "package": "node esbuild.js --production && npm run build:webview && npx @vscode/vsce package",
+    "typecheck": "tsc --noEmit -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.95.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.6.0"
+  },
+  "allowScripts": {
+    "esbuild@0.24.2": true
+  },
+  "dependencies": {
+    "@vscode/codicons": "^0.0.46-24"
+  }
+}
