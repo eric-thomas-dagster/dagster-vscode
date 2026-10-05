@@ -307,26 +307,45 @@ export function registerProjectComponentsView(
     vscode.commands.registerCommand('dagsterPowerUser.addScheduleForJob', async (arg: unknown) => {
       const jobName = typeof arg === 'string' ? arg : (arg as { info?: PrimitiveRefInfo } | undefined)?.info?.name;
       if (!jobName) return;
-
-      const cron = await vscode.window.showInputBox({
-        title: `Add a schedule for job "${jobName}"`,
-        prompt: 'Cron expression',
-        placeHolder: '0 6 * * *',
-        value: '0 0 * * *',
-      });
-      if (!cron) return;
-
-      const location = await resolver.resolve(jobName);
-      if (!location) {
-        vscode.window.showWarningMessage(`Dagster: couldn't find job "${jobName}" in your local source to edit.`);
-        return;
-      }
-      const instruction = new vscode.Diagnostic(
-        location.range,
-        `Add a new @schedule(job=${jobName}, cron_schedule="${cron}") function in this file that returns {} (an empty run config). Give the schedule function a short, descriptive name. If this file has a Definitions(...) or Definitions.merge(...) call with a schedules=[...] list, add the new schedule function to it; if there's no such list in this file, just add the function.`,
-        vscode.DiagnosticSeverity.Hint
-      );
-      await vscode.commands.executeCommand('dagsterPowerUser.fixDiagnosticWithAi', location.uri, instruction, true);
+      await promptAndScaffoldSchedule(resolver, jobName, `job=${jobName}`);
+    }),
+    // @schedule's real `target` parameter (confirmed via inspect.signature
+    // against the installed dagster package) is a CoercibleToAssetSelection
+    // -- the same type define_asset_job's `selection` uses -- so a
+    // schedule can target assets directly, no job required. This is the
+    // asset-side twin of addScheduleForJob above, sharing the cron prompt
+    // + scaffold logic via promptAndScaffoldSchedule.
+    vscode.commands.registerCommand('dagsterPowerUser.addScheduleForAsset', async (arg: unknown) => {
+      const assetKey = typeof arg === 'string' ? arg : (arg as AssetTreeItem | undefined)?.info?.key;
+      if (!assetKey) return;
+      await promptAndScaffoldSchedule(resolver, assetKey, `target=["${assetKey}"]`, true);
     })
   );
+
+  async function promptAndScaffoldSchedule(
+    resolver: AssetDefinitionResolver,
+    name: string,
+    targetArg: string,
+    isAsset = false
+  ): Promise<void> {
+    const cron = await vscode.window.showInputBox({
+      title: `Add a schedule for ${isAsset ? 'asset' : 'job'} "${name}"`,
+      prompt: 'Cron expression',
+      placeHolder: '0 6 * * *',
+      value: '0 0 * * *',
+    });
+    if (!cron) return;
+
+    const location = await resolver.resolve(name);
+    if (!location) {
+      vscode.window.showWarningMessage(`Dagster: couldn't find "${name}" in your local source to edit.`);
+      return;
+    }
+    const instruction = new vscode.Diagnostic(
+      location.range,
+      `Add a new @schedule(${targetArg}, cron_schedule="${cron}") function in this file that returns {} (an empty run config). Give the schedule function a short, descriptive name. If this file has a Definitions(...) or Definitions.merge(...) call with a schedules=[...] list, add the new schedule function to it; if there's no such list in this file, just add the function.`,
+      vscode.DiagnosticSeverity.Hint
+    );
+    await vscode.commands.executeCommand('dagsterPowerUser.fixDiagnosticWithAi', location.uri, instruction, true);
+  }
 }

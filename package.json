@@ -236,6 +236,11 @@
       },
       {
         "command": "dagsterPowerUser.addScheduleForJob",
+        "title": "Dagster: Add Schedule (for Job)...",
+        "category": "Dagster"
+      },
+      {
+        "command": "dagsterPowerUser.addScheduleForAsset",
         "title": "Dagster: Add Schedule...",
         "category": "Dagster"
       }
@@ -367,6 +372,10 @@
         },
         {
           "command": "dagsterPowerUser.addAssetCheck",
+          "when": "view == dagsterPowerUser.projectComponents && viewItem == dagsterAsset"
+        },
+        {
+          "command": "dagsterPowerUser.addScheduleForAsset",
           "when": "view == dagsterPowerUser.projectComponents && viewItem == dagsterAsset"
         },
         {
