@@ -192,6 +192,45 @@ export function registerProjectComponentsView(
       }
       const url = `${deriveWebBaseUrl(graphqlUrl)}/assets/${key}`;
       await vscode.env.openExternal(vscode.Uri.parse(url));
+    }),
+    vscode.commands.registerCommand('dagsterPowerUser.addAssetDependency', async (arg: unknown) => {
+      const downstreamKey = typeof arg === 'string' ? arg : (arg as AssetTreeItem | undefined)?.info?.key;
+      if (!downstreamKey) return;
+
+      const seen = new Set<string>();
+      const keys = [...assets.getIndex().values()]
+        .map((i) => i.key)
+        .filter((k) => k !== downstreamKey && !seen.has(k) && seen.add(k));
+      if (keys.length === 0) {
+        vscode.window.showWarningMessage('Dagster: no other assets loaded to depend on.');
+        return;
+      }
+      const upstreamKey = await vscode.window.showQuickPick(keys, {
+        title: `Make "${downstreamKey}" depend on which asset?`,
+      });
+      if (!upstreamKey) return;
+
+      const location = await resolver.resolve(downstreamKey);
+      if (!location) {
+        vscode.window.showWarningMessage(`Dagster: couldn't find "${downstreamKey}" in your local source to edit.`);
+        return;
+      }
+
+      // Plain Python assets get their decorator edited directly; anything
+      // else (a component's defs.yaml) goes through the SAME
+      // post_processing mechanism as "Add Dependency to Folder...", just
+      // scoped to this one asset via a real `key:"..."` selector
+      // (confirmed live: AssetSelection.from_string parses this exact
+      // syntax) instead of "*".
+      const isPython = location.uri.fsPath.toLowerCase().endsWith('.py');
+      const instruction = new vscode.Diagnostic(
+        location.range,
+        isPython
+          ? `Add "${upstreamKey}" as a dependency of this asset (the @asset(...) decorator for asset key "${downstreamKey}") -- e.g. deps=["${upstreamKey}"], or extend an existing deps list. Keep every other argument exactly as-is, and don't duplicate an existing entry.`
+          : `This file configures asset "${downstreamKey}" via a Dagster component. Add a dependency on "${upstreamKey}": add a post_processing.assets entry with target: 'key:"${downstreamKey}"', operation: merge, attributes.deps including "${upstreamKey}" -- create that structure (and the DefsFolderComponent type header, if this is a folder-level defs.yaml) if it doesn't exist, without removing or duplicating any existing post_processing entries.`,
+        vscode.DiagnosticSeverity.Hint
+      );
+      await vscode.commands.executeCommand('dagsterPowerUser.fixDiagnosticWithAi', location.uri, instruction);
     })
   );
 }

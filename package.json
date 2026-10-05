@@ -213,6 +213,11 @@
         "command": "dagsterPowerUser.addFolderDependency",
         "title": "Dagster: Add Dependency to Folder...",
         "category": "Dagster"
+      },
+      {
+        "command": "dagsterPowerUser.addAssetDependency",
+        "title": "Dagster: Add Dependency...",
+        "category": "Dagster"
       }
     ],
     "languageModelTools": [
@@ -326,6 +331,10 @@
         },
         {
           "command": "dagsterPowerUser.openAssetInDagster",
+          "when": "view == dagsterPowerUser.projectComponents && viewItem == dagsterAsset"
+        },
+        {
+          "command": "dagsterPowerUser.addAssetDependency",
           "when": "view == dagsterPowerUser.projectComponents && viewItem == dagsterAsset"
         }
       ],
