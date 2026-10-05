@@ -423,8 +423,8 @@ export function parseAutomationsResult(data: AutomationsRaw): AutomationItem[] {
   return items;
 }
 
-export async function fetchAutomations(graphqlUrl: string): Promise<AutomationItem[]> {
-  const data = await postGraphQL<AutomationsRaw>(graphqlUrl, AUTOMATIONS_QUERY);
+export async function fetchAutomations(graphqlUrl: string, headers?: Record<string, string>): Promise<AutomationItem[]> {
+  const data = await postGraphQL<AutomationsRaw>(graphqlUrl, AUTOMATIONS_QUERY, 10000, headers);
   return parseAutomationsResult(data);
 }
 
@@ -437,34 +437,46 @@ export interface InstigatorSelector {
 /** Selector-based (start) vs id-based (stop) because that's what the
  * live schema actually requires -- confirmed via introspection, not
  * symmetric by choice. */
-export async function startSchedule(graphqlUrl: string, selector: InstigatorSelector): Promise<void> {
+export async function startSchedule(
+  graphqlUrl: string,
+  selector: InstigatorSelector,
+  headers?: Record<string, string>
+): Promise<void> {
   await postGraphQL(
     graphqlUrl,
     `mutation { startSchedule(scheduleSelector: ${JSON.stringify({
       repositoryName: selector.repositoryName,
       repositoryLocationName: selector.repositoryLocationName,
       scheduleName: selector.name,
-    })}) { __typename } }`
+    })}) { __typename } }`,
+    10000,
+    headers
   );
 }
 
-export async function stopSchedule(graphqlUrl: string, scheduleId: string): Promise<void> {
-  await postGraphQL(graphqlUrl, `mutation { stopRunningSchedule(id: ${JSON.stringify(scheduleId)}) { __typename } }`);
+export async function stopSchedule(graphqlUrl: string, scheduleId: string, headers?: Record<string, string>): Promise<void> {
+  await postGraphQL(graphqlUrl, `mutation { stopRunningSchedule(id: ${JSON.stringify(scheduleId)}) { __typename } }`, 10000, headers);
 }
 
-export async function startSensor(graphqlUrl: string, selector: InstigatorSelector): Promise<void> {
+export async function startSensor(
+  graphqlUrl: string,
+  selector: InstigatorSelector,
+  headers?: Record<string, string>
+): Promise<void> {
   await postGraphQL(
     graphqlUrl,
     `mutation { startSensor(sensorSelector: ${JSON.stringify({
       repositoryName: selector.repositoryName,
       repositoryLocationName: selector.repositoryLocationName,
       sensorName: selector.name,
-    })}) { __typename } }`
+    })}) { __typename } }`,
+    10000,
+    headers
   );
 }
 
-export async function stopSensor(graphqlUrl: string, sensorId: string): Promise<void> {
-  await postGraphQL(graphqlUrl, `mutation { stopSensor(id: ${JSON.stringify(sensorId)}) { __typename } }`);
+export async function stopSensor(graphqlUrl: string, sensorId: string, headers?: Record<string, string>): Promise<void> {
+  await postGraphQL(graphqlUrl, `mutation { stopSensor(id: ${JSON.stringify(sensorId)}) { __typename } }`, 10000, headers);
 }
 
 // ---- Target-aware run launching (Local / Dagster OSS remote / Dagster+
@@ -566,4 +578,149 @@ export async function launchJobRun(
     endpoint,
     `jobName: ${JSON.stringify(jobName)}, repositoryName: ${JSON.stringify(selector.repositoryName)}, repositoryLocationName: ${JSON.stringify(selector.repositoryLocationName)}`
   );
+}
+
+// ---- Run explorer: list/view/terminate/retry runs -- same target-aware
+// endpoint concept as everything above. All fields/mutations verified
+// live (real run data, a real retry that queued a genuinely new run,
+// and real structured log events) before being written down.
+
+export type RunStatus =
+  | 'QUEUED'
+  | 'NOT_STARTED'
+  | 'MANAGED'
+  | 'STARTING'
+  | 'STARTED'
+  | 'SUCCESS'
+  | 'FAILURE'
+  | 'CANCELING'
+  | 'CANCELED';
+
+export interface RunSummary {
+  runId: string;
+  status: RunStatus;
+  jobName: string;
+  creationTime: number;
+  startTime: number | null;
+  endTime: number | null;
+  canTerminate: boolean;
+  hasReExecutePermission: boolean;
+  hasTerminatePermission: boolean;
+}
+
+export async function fetchRuns(endpoint: GraphQLEndpoint, limit = 30): Promise<RunSummary[]> {
+  const query = `
+    query DagsterPowerUserRuns {
+      runsOrError(limit: ${limit}) {
+        __typename
+        ... on Runs {
+          results {
+            runId
+            status
+            jobName
+            creationTime
+            startTime
+            endTime
+            canTerminate
+            hasReExecutePermission
+            hasTerminatePermission
+          }
+        }
+        ... on PythonError { message }
+      }
+    }
+  `;
+  const data = await postGraphQL<{
+    runsOrError: { __typename: string; results?: RunSummary[]; message?: string };
+  }>(endpoint.url, query, 10000, endpoint.headers);
+  if (data.runsOrError.__typename === 'PythonError') {
+    throw new Error(data.runsOrError.message ?? 'Dagster: failed to list runs.');
+  }
+  return data.runsOrError.results ?? [];
+}
+
+export interface RunLogEntry {
+  message: string;
+  /** Epoch milliseconds -- confirmed live the API returns this as a
+   * numeric STRING, not a Float like the Run type's own timestamps. */
+  timestamp: string;
+  level: string;
+  stepKey: string | null;
+  eventType: string | null;
+}
+
+export async function fetchRunLogs(endpoint: GraphQLEndpoint, runId: string, limit = 200): Promise<RunLogEntry[]> {
+  const query = `
+    query DagsterPowerUserRunLogs {
+      logsForRun(runId: ${JSON.stringify(runId)}, limit: ${limit}) {
+        __typename
+        ... on EventConnection {
+          events { __typename ... on MessageEvent { message timestamp level stepKey eventType } }
+        }
+        ... on PythonError { message }
+      }
+    }
+  `;
+  const data = await postGraphQL<{
+    logsForRun: { __typename: string; events?: RunLogEntry[]; message?: string };
+  }>(endpoint.url, query, 10000, endpoint.headers);
+  if (data.logsForRun.__typename === 'PythonError') {
+    throw new Error(data.logsForRun.message ?? 'Dagster: failed to load run logs.');
+  }
+  return data.logsForRun.events ?? [];
+}
+
+export interface MutationOutcome {
+  success: boolean;
+  message: string;
+}
+
+export async function terminateRunById(endpoint: GraphQLEndpoint, runId: string): Promise<MutationOutcome> {
+  const query = `mutation { terminateRun(runId: ${JSON.stringify(runId)}) { __typename ... on TerminateRunSuccess { run { runId } } ... on PythonError { message } ... on RunNotFoundError { message } ... on UnauthorizedError { message } } }`;
+  const data = await postGraphQL<{ terminateRun: { __typename: string; message?: string } }>(
+    endpoint.url,
+    query,
+    10000,
+    endpoint.headers
+  );
+  if (data.terminateRun.__typename === 'TerminateRunSuccess') {
+    return { success: true, message: 'Run terminated.' };
+  }
+  return { success: false, message: data.terminateRun.message ?? `Terminate failed (${data.terminateRun.__typename}).` };
+}
+
+export async function retryRun(endpoint: GraphQLEndpoint, parentRunId: string): Promise<LaunchRunOutcome> {
+  const query = `mutation {
+    launchRunReexecution(reexecutionParams: { parentRunId: ${JSON.stringify(parentRunId)}, strategy: ALL_STEPS }) {
+      __typename
+      ... on LaunchRunSuccess { run { runId status } }
+      ... on PythonError { message }
+      ... on RunConfigValidationInvalid { errors { message } }
+      ... on UnauthorizedError { message }
+      ... on ConflictingExecutionParamsError { message }
+    }
+  }`;
+  const data = await postGraphQL<{
+    launchRunReexecution: {
+      __typename: string;
+      run?: { runId: string; status: string };
+      message?: string;
+      errors?: Array<{ message: string }>;
+    };
+  }>(endpoint.url, query, 15000, endpoint.headers);
+  const result = data.launchRunReexecution;
+  if (result.__typename === 'LaunchRunSuccess' && result.run) {
+    return { success: true, runId: result.run.runId, message: `Retried as ${result.run.runId} (${result.run.status}).` };
+  }
+  const message = result.message ?? result.errors?.map((e) => e.message).join('; ') ?? `Retry failed (${result.__typename}).`;
+  return { success: false, message };
+}
+
+/** The webserver UI and the GraphQL API are served from the same host --
+ * confirmed live (both `/graphql` and `/runs/<id>` respond on the same
+ * port). Dagster's run/asset page routes (`/runs/<id>`, `/assets/<path>`)
+ * are stable, long-standing conventions used identically by Dagster OSS
+ * and Dagster+. */
+export function deriveWebBaseUrl(graphqlUrl: string): string {
+  return graphqlUrl.replace(/\/graphql\/?$/, '');
 }

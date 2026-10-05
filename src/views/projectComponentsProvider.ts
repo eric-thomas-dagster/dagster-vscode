@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import type { AssetIndexStore, AssetRefInfo } from '../data/assetIndex';
 import type { PrimitiveIndexStore, PrimitiveRefInfo } from '../data/primitiveIndex';
 import type { AssetDefinitionResolver } from '../language/definitionProvider';
+import { deriveWebBaseUrl } from '../data/graphqlClient';
 
 /**
  * Sidebar tree of everything the current dev server knows about --
@@ -163,7 +164,8 @@ export function registerProjectComponentsView(
   context: vscode.ExtensionContext,
   assets: AssetIndexStore,
   primitives: PrimitiveIndexStore,
-  resolver: AssetDefinitionResolver
+  resolver: AssetDefinitionResolver,
+  getGraphqlUrl: () => string
 ): void {
   const provider = new ProjectComponentsProvider(assets, primitives);
   context.subscriptions.push(
@@ -179,6 +181,12 @@ export function registerProjectComponentsView(
       }
       const doc = await vscode.workspace.openTextDocument(location.uri);
       await vscode.window.showTextDocument(doc, { selection: location.range });
+    }),
+    vscode.commands.registerCommand('dagsterPowerUser.openAssetInDagster', async (arg: unknown) => {
+      const key = typeof arg === 'string' ? arg : (arg as AssetTreeItem | undefined)?.info?.key;
+      if (!key) return;
+      const url = `${deriveWebBaseUrl(getGraphqlUrl())}/assets/${key}`;
+      await vscode.env.openExternal(vscode.Uri.parse(url));
     })
   );
 }

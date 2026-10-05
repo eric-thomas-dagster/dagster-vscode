@@ -26,6 +26,7 @@ const MORE_ACTIONS: ActionDef[] = [
   { command: 'dagsterPowerUser.showDagsterPlusUsage', label: 'Dagster+ Usage', icon: 'graph', category: 'Dagster+' },
   { command: 'dagsterPowerUser.setDagsterPlusCredentials', label: 'Connect Dagster+...', icon: 'plug', category: 'Dagster+' },
   { command: 'dagsterPowerUser.manageAutomations', label: 'Manage Schedules & Sensors', icon: 'debug-start', category: 'Automations' },
+  { command: 'dagsterPowerUser.showRunExplorer', label: 'Show Runs', icon: 'history', category: 'Runs' },
   { command: 'dagsterPowerUser.setupDagsterPlusMcp', label: 'Set Up Dagster+ MCP Server', icon: 'plug', category: 'Dagster+' },
   { command: 'dagsterPowerUser.switchTarget', label: 'Switch Target (Local / Remote)...', icon: 'arrow-swap', category: 'Target' },
 ];

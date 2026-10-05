@@ -10,6 +10,7 @@ import {
   stopSensor,
   fetchAssetGraph,
   fetchPrimitives,
+  fetchRunLogs,
 } from './data/graphqlClient';
 import type { PrimitiveRefInfo } from './data/primitiveIndex';
 import { askDagsterExpert } from './ai/dagsterExpert';
@@ -38,6 +39,8 @@ import { registerFixDiagnosticCommand } from './commands/fixDiagnostic';
 import { registerManageAutomationsCommand } from './commands/manageAutomations';
 import { registerMcpConfigCommand } from './mcp/mcpConfigWriter';
 import { ActiveTargetStore, pickTarget, resolveEndpoint } from './data/activeTarget';
+import { showRunExplorerPanel } from './webviews/runExplorerPanel';
+import { registerLanguageModelTools } from './lm/tools';
 
 let projects = new Map<string, DagsterProject>();
 let output: vscode.OutputChannel;
@@ -112,7 +115,7 @@ export async function activate(context: vscode.ExtensionContext) {
   registerAssetHoverProvider(context, assetIndexStore, primitiveIndexStore);
   const definitionResolver = registerAssetDefinitionProvider(context, assetIndexStore, primitiveIndexStore);
   registerAssetRefDiagnostics(context, assetIndexStore);
-  registerProjectComponentsView(context, assetIndexStore, primitiveIndexStore, definitionResolver);
+  registerProjectComponentsView(context, assetIndexStore, primitiveIndexStore, definitionResolver, () => devServerStatus.getGraphqlUrl());
 
   // Primitives refresh AFTER assets (not in parallel) -- filtering out
   // asset-backing ops needs the asset index already populated.
@@ -163,8 +166,13 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('dagsterPowerUser.switchTarget', async () => {
       const picked = await pickTarget(context, !!getPrimaryProject());
       if (picked) await activeTargetStore.set(picked);
-    })
+    }),
+    vscode.commands.registerCommand('dagsterPowerUser.showRunExplorer', () =>
+      showRunExplorerPanel(context, activeTargetStore, () => (getPrimaryProject() ? devServerStatus.getGraphqlUrl() : undefined))
+    )
   );
+
+  registerLanguageModelTools(context, activeTargetStore, () => (getPrimaryProject() ? devServerStatus.getGraphqlUrl() : undefined));
 
   async function toggleAutomationFromTree(treeItem: { info?: PrimitiveRefInfo }, target: 'start' | 'stop'): Promise<void> {
     const info = treeItem?.info;
@@ -192,6 +200,22 @@ export async function activate(context: vscode.ExtensionContext) {
     )
   );
 
+  /** Shared by anything that wants to hand a real error/failure straight
+   * to Dagster Expert as a conversation (not a file-localized Quick Fix)
+   * -- focuses the chat view, asks, and appends both sides to the active
+   * session so it shows up there like any other exchange. */
+  async function askDagsterExpertAbout(question: string): Promise<void> {
+    await vscode.commands.executeCommand('dagsterPowerUser.chat.focus');
+    try {
+      const history = sessionManager.getActiveSession().messages;
+      const answer = await askDagsterExpert(context, assetIndexStore, primitiveIndexStore, question, history);
+      await sessionManager.appendMessage({ role: 'user', content: question });
+      await sessionManager.appendMessage({ role: 'assistant', content: answer });
+    } catch (e) {
+      vscode.window.showErrorMessage(`Dagster Expert: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
   context.subscriptions.push(
     vscode.commands.registerCommand('dagsterPowerUser.showLoadError', async (errorText: string) => {
       const choice = await vscode.window.showErrorMessage(
@@ -202,17 +226,79 @@ export async function activate(context: vscode.ExtensionContext) {
       if (choice === 'Copy Full Error') {
         await vscode.env.clipboard.writeText(errorText);
       } else if (choice === 'Ask Dagster Expert') {
-        await vscode.commands.executeCommand('dagsterPowerUser.chat.focus');
-        const question = `My project's definitions failed to load. Here's the real error:\n\n${errorText}\n\nWhat's likely wrong, and how do I fix it?`;
+        await askDagsterExpertAbout(
+          `My project's definitions failed to load. Here's the real error:\n\n${errorText}\n\nWhat's likely wrong, and how do I fix it?`
+        );
+      }
+    }),
+    vscode.commands.registerCommand('dagsterPowerUser.analyzeRunFailure', async (runId: string) => {
+      const target = activeTargetStore.get();
+      const localUrl = getPrimaryProject() ? devServerStatus.getGraphqlUrl() : '';
+      const endpoint = await resolveEndpoint(context, target, localUrl);
+      if (!endpoint) {
+        vscode.window.showWarningMessage('Dagster: no target connected to analyze this run.');
+        return;
+      }
+
+      let logs;
+      try {
+        logs = await vscode.window.withProgress(
+          { location: vscode.ProgressLocation.Notification, title: 'Dagster: loading failure details...' },
+          () => fetchRunLogs(endpoint, runId, 300)
+        );
+      } catch (e) {
+        vscode.window.showErrorMessage(`Dagster: couldn't load logs (${e instanceof Error ? e.message : String(e)}).`);
+        return;
+      }
+
+      // Real Dagster failure events embed the full Python traceback in
+      // their own message -- confirmed live via logsForRun -- so
+      // filtering to error-level/failure-typed entries and joining their
+      // messages reconstructs the traceback without needing raw stdout.
+      const failureEntries = logs.filter(
+        (l) => /FAILURE/i.test(l.eventType ?? '') || l.level === 'ERROR' || l.level === 'CRITICAL'
+      );
+      const failureText = (failureEntries.length ? failureEntries : logs)
+        .map((l) => l.message)
+        .filter(Boolean)
+        .join('\n\n');
+      if (!failureText.trim()) {
+        vscode.window.showInformationMessage("Dagster: no failure details found in this run's logs.");
+        return;
+      }
+
+      // Same "last File \"...\", line N wins" rule as dg check's own
+      // traceback parsing -- Dagster hides its own internal frames and
+      // only prints the user's, so the last match is the real offender.
+      const fileLineMatches = [...failureText.matchAll(/File "([^"]+)", line (\d+)/g)];
+      const lastMatch = fileLineMatches[fileLineMatches.length - 1];
+
+      if (lastMatch) {
+        const uri = vscode.Uri.file(lastMatch[1]);
+        const line = Math.max(0, parseInt(lastMatch[2], 10) - 1);
         try {
-          const history = sessionManager.getActiveSession().messages;
-          const answer = await askDagsterExpert(context, assetIndexStore, primitiveIndexStore, question, history);
-          await sessionManager.appendMessage({ role: 'user', content: question });
-          await sessionManager.appendMessage({ role: 'assistant', content: answer });
-        } catch (e) {
-          vscode.window.showErrorMessage(`Dagster Expert: ${e instanceof Error ? e.message : String(e)}`);
+          await vscode.workspace.fs.stat(uri);
+          const diagnostic = new vscode.Diagnostic(
+            new vscode.Range(line, 0, line, 1000),
+            failureText.split('\n').slice(0, 20).join('\n'),
+            vscode.DiagnosticSeverity.Error
+          );
+          // Reuses the exact same suggest-a-fix + diff-preview + Apply/
+          // Discard flow as the dg check Quick Fix lightbulb -- no
+          // separate implementation needed for "a run failed" vs. "dg
+          // check found an error".
+          await vscode.commands.executeCommand('dagsterPowerUser.fixDiagnosticWithAi', uri, diagnostic);
+          return;
+        } catch {
+          // The file the traceback points at isn't on disk here (e.g.
+          // targeting a remote/Dagster+ deployment whose code isn't
+          // checked out in this workspace) -- fall through to chat.
         }
       }
+
+      await askDagsterExpertAbout(
+        `A Dagster run just failed. Here are the real failure details from its logs:\n\n${failureText.slice(0, 4000)}\n\nWhat's likely wrong, and how do I fix it?`
+      );
     })
   );
 
