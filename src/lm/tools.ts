@@ -88,10 +88,10 @@ export function registerLanguageModelTools(
   );
 
   context.subscriptions.push(
-    vscode.lm.registerTool<{ limit?: number }>('dagster_list_runs', {
+    vscode.lm.registerTool<{ limit?: number; jobName?: string }>('dagster_list_runs', {
       invoke: async (options) => {
         const endpoint = await endpointOrThrow();
-        const runs = await fetchRuns(endpoint, options.input.limit ?? 20);
+        const runs = await fetchRuns(endpoint, options.input.limit ?? 20, options.input.jobName);
         return textResult(runs);
       },
     })

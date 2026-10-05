@@ -184,7 +184,17 @@ export async function activate(context: vscode.ExtensionContext) {
     }),
     vscode.commands.registerCommand('dagsterPowerUser.showRunExplorer', () =>
       showRunExplorerPanel(context, activeTargetStore, () => (getPrimaryProject() ? devServerStatus.getGraphqlUrl() : undefined))
-    )
+    ),
+    vscode.commands.registerCommand('dagsterPowerUser.showRunsForJob', (arg: unknown) => {
+      const jobName = typeof arg === 'string' ? arg : (arg as { info?: PrimitiveRefInfo } | undefined)?.info?.name;
+      if (!jobName) return;
+      return showRunExplorerPanel(
+        context,
+        activeTargetStore,
+        () => (getPrimaryProject() ? devServerStatus.getGraphqlUrl() : undefined),
+        jobName
+      );
+    })
   );
 
   registerLanguageModelTools(context, activeTargetStore, () => (getPrimaryProject() ? devServerStatus.getGraphqlUrl() : undefined));

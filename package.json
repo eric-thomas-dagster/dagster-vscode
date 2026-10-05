@@ -243,6 +243,16 @@
         "command": "dagsterPowerUser.addScheduleForAsset",
         "title": "Dagster: Add Schedule...",
         "category": "Dagster"
+      },
+      {
+        "command": "dagsterPowerUser.showRunsForJob",
+        "title": "Dagster: Show Runs",
+        "category": "Dagster"
+      },
+      {
+        "command": "dagsterPowerUser.openPrimitiveInDagster",
+        "title": "Dagster: Open in Dagster",
+        "category": "Dagster"
       }
     ],
     "languageModelTools": [
@@ -255,10 +265,13 @@
       {
         "name": "dagster_list_runs",
         "displayName": "List Dagster Runs",
-        "modelDescription": "Lists recent Dagster runs for the currently active target, with status, job name, and timing.",
+        "modelDescription": "Lists recent Dagster runs for the currently active target, with status, job name, and timing. Optionally filter to a single job.",
         "inputSchema": {
           "type": "object",
-          "properties": { "limit": { "type": "number", "description": "Max runs to return, default 20" } }
+          "properties": {
+            "limit": { "type": "number", "description": "Max runs to return, default 20" },
+            "jobName": { "type": "string", "description": "Only return runs of this job" }
+          }
         }
       },
       {
@@ -381,6 +394,14 @@
         {
           "command": "dagsterPowerUser.addScheduleForJob",
           "when": "view == dagsterPowerUser.projectComponents && viewItem == dagsterjob"
+        },
+        {
+          "command": "dagsterPowerUser.showRunsForJob",
+          "when": "view == dagsterPowerUser.projectComponents && viewItem == dagsterjob"
+        },
+        {
+          "command": "dagsterPowerUser.openPrimitiveInDagster",
+          "when": "view == dagsterPowerUser.projectComponents && (viewItem == dagsterjob || viewItem == dagsterschedule || viewItem == dagsterscheduleRunning || viewItem == dagsterscheduleStopped || viewItem == dagstersensor || viewItem == dagstersensorRunning || viewItem == dagstersensorStopped)"
         }
       ],
       "explorer/context": [

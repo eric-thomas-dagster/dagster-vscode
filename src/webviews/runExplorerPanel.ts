@@ -11,6 +11,7 @@ import {
 import { type ActiveTargetStore, describeTarget, resolveEndpoint } from '../data/activeTarget';
 
 let currentPanel: vscode.WebviewPanel | undefined;
+let currentJobFilter: string | undefined;
 
 function getNonce(): string {
   const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -82,7 +83,15 @@ function renderRunRow(run: RunSummary, webBaseUrl: string): string {
     </div>`;
 }
 
-function renderBody(nonce: string, connected: boolean, targetLabel: string, runs?: RunSummary[], webBaseUrl?: string, error?: string): string {
+function renderBody(
+  nonce: string,
+  connected: boolean,
+  targetLabel: string,
+  runs?: RunSummary[],
+  webBaseUrl?: string,
+  error?: string,
+  jobFilter?: string
+): string {
   if (error) {
     return `
       <div class="cta">
@@ -111,16 +120,26 @@ function renderBody(nonce: string, connected: boolean, targetLabel: string, runs
   }
 
   const rows = (runs ?? []).map((r) => renderRunRow(r, webBaseUrl ?? '')).join('');
+  const noRunsMessage = jobFilter ? `No runs yet for job "${escapeHtml(jobFilter)}".` : 'No runs yet.';
 
   return `
     <div class="header-row">
-      <span class="target-badge">${escapeHtml(targetLabel)}</span>
+      <div class="header-left">
+        <span class="target-badge">${escapeHtml(targetLabel)}</span>
+        ${
+          jobFilter
+            ? `<span class="job-filter">job: <strong>${escapeHtml(jobFilter)}</strong> <a id="clear-filter-btn" title="Show all runs">&times;</a></span>`
+            : ''
+        }
+      </div>
       <button id="refresh-btn" title="Refresh"><i class="codicon codicon-refresh"></i></button>
     </div>
-    <div class="runs-list">${rows || '<p class="muted">No runs yet.</p>'}</div>
+    <div class="runs-list">${rows || `<p class="muted">${noRunsMessage}</p>`}</div>
     <script nonce="${nonce}">
       const vscode = acquireVsCodeApi();
       document.getElementById('refresh-btn').addEventListener('click', () => vscode.postMessage({ type: 'refresh' }));
+      const clearFilterBtn = document.getElementById('clear-filter-btn');
+      if (clearFilterBtn) clearFilterBtn.addEventListener('click', () => vscode.postMessage({ type: 'clearFilter' }));
       document.querySelectorAll('.log-btn').forEach((btn) => {
         btn.addEventListener('click', () => {
           const runId = btn.getAttribute('data-run-id');
@@ -181,11 +200,15 @@ function renderHtml(webview: vscode.Webview, mediaRoot: vscode.Uri, nonce: strin
     #refresh-btn { background: transparent; color: var(--vscode-foreground); padding: 4px 8px; }
     #refresh-btn:hover { background: var(--vscode-toolbar-hoverBackground, rgba(128,128,128,0.2)); }
     .header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+    .header-left { display: flex; align-items: center; gap: 10px; }
     .target-badge {
       font-size: 12px; font-weight: 600;
       background: var(--vscode-badge-background); color: var(--vscode-badge-foreground);
       padding: 3px 10px; border-radius: 999px;
     }
+    .job-filter { font-size: 12px; opacity: 0.8; }
+    .job-filter a { color: var(--vscode-textLink-foreground); cursor: pointer; text-decoration: none; margin-left: 4px; }
+    .job-filter a:hover { color: var(--vscode-textLink-activeForeground); }
     .muted { opacity: 0.65; }
     .runs-list { display: flex; flex-direction: column; gap: 6px; }
     .run-row {
@@ -245,19 +268,19 @@ async function refresh(
   }
 
   try {
-    const runs = await fetchRuns(endpoint);
+    const runs = await fetchRuns(endpoint, 30, currentJobFilter);
     panel.webview.html = renderHtml(
       panel.webview,
       mediaRoot,
       nonce,
-      renderBody(nonce, true, targetLabel, runs, deriveWebBaseUrl(endpoint.url))
+      renderBody(nonce, true, targetLabel, runs, deriveWebBaseUrl(endpoint.url), undefined, currentJobFilter)
     );
   } catch (e) {
     panel.webview.html = renderHtml(
       panel.webview,
       mediaRoot,
       nonce,
-      renderBody(nonce, true, targetLabel, undefined, undefined, e instanceof Error ? e.message : String(e))
+      renderBody(nonce, true, targetLabel, undefined, undefined, e instanceof Error ? e.message : String(e), currentJobFilter)
     );
   }
 }
@@ -265,23 +288,29 @@ async function refresh(
 export async function showRunExplorerPanel(
   context: vscode.ExtensionContext,
   activeTargetStore: ActiveTargetStore,
-  getLocalGraphqlUrl: () => string | undefined
+  getLocalGraphqlUrl: () => string | undefined,
+  jobFilter?: string
 ): Promise<void> {
   const mediaRoot = vscode.Uri.joinPath(context.extensionUri, 'media');
+  currentJobFilter = jobFilter;
 
   if (currentPanel) {
+    currentPanel.title = jobFilter ? `Dagster Runs: ${jobFilter}` : 'Dagster Runs';
     currentPanel.reveal();
     void refresh(context, currentPanel, mediaRoot, activeTargetStore, getLocalGraphqlUrl);
     return;
   }
 
-  const panel = vscode.window.createWebviewPanel('dagsterPowerUser.runExplorer', 'Dagster Runs', vscode.ViewColumn.Active, {
-    enableScripts: true,
-    localResourceRoots: [mediaRoot],
-  });
+  const panel = vscode.window.createWebviewPanel(
+    'dagsterPowerUser.runExplorer',
+    jobFilter ? `Dagster Runs: ${jobFilter}` : 'Dagster Runs',
+    vscode.ViewColumn.Active,
+    { enableScripts: true, localResourceRoots: [mediaRoot] }
+  );
   currentPanel = panel;
   panel.onDidDispose(() => {
     currentPanel = undefined;
+    currentJobFilter = undefined;
     targetChangeDisposable?.dispose();
   });
 
@@ -295,6 +324,10 @@ export async function showRunExplorerPanel(
     const endpoint = await resolveEndpoint(context, target, localUrl);
 
     if (message.type === 'refresh') {
+      void refresh(context, panel, mediaRoot, activeTargetStore, getLocalGraphqlUrl);
+    } else if (message.type === 'clearFilter') {
+      currentJobFilter = undefined;
+      panel.title = 'Dagster Runs';
       void refresh(context, panel, mediaRoot, activeTargetStore, getLocalGraphqlUrl);
     } else if (message.type === 'switchTarget') {
       await vscode.commands.executeCommand('dagsterPowerUser.switchTarget');

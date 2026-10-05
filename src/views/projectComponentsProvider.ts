@@ -193,6 +193,29 @@ export function registerProjectComponentsView(
       const url = `${deriveWebBaseUrl(graphqlUrl)}/assets/${key}`;
       await vscode.env.openExternal(vscode.Uri.parse(url));
     }),
+    // Covers job/schedule/sensor -- each has its own real overview page in
+    // the Dagster UI at /<plural-kind>/<name>. Ops/resources/IO managers
+    // don't get one: they don't have a standalone page the same way (ops
+    // only show up inside a job's graph), so no entry for those rather
+    // than guessing a route.
+    vscode.commands.registerCommand('dagsterPowerUser.openPrimitiveInDagster', async (arg: unknown) => {
+      const info = (arg as { info?: PrimitiveRefInfo } | undefined)?.info;
+      if (!info) return;
+      const pathByKind: Partial<Record<PrimitiveRefInfo['kind'], string>> = {
+        job: 'jobs',
+        schedule: 'schedules',
+        sensor: 'sensors',
+      };
+      const segment = pathByKind[info.kind];
+      if (!segment) return;
+      const graphqlUrl = await getActiveGraphqlUrl();
+      if (!graphqlUrl) {
+        vscode.window.showWarningMessage('Dagster: no target currently connected.');
+        return;
+      }
+      const url = `${deriveWebBaseUrl(graphqlUrl)}/${segment}/${info.name}`;
+      await vscode.env.openExternal(vscode.Uri.parse(url));
+    }),
     vscode.commands.registerCommand('dagsterPowerUser.addAssetDependency', async (arg: unknown) => {
       const downstreamKey = typeof arg === 'string' ? arg : (arg as AssetTreeItem | undefined)?.info?.key;
       if (!downstreamKey) return;

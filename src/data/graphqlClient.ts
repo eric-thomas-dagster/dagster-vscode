@@ -612,10 +612,14 @@ export interface RunSummary {
   hasTerminatePermission: boolean;
 }
 
-export async function fetchRuns(endpoint: GraphQLEndpoint, limit = 30): Promise<RunSummary[]> {
+export async function fetchRuns(endpoint: GraphQLEndpoint, limit = 30, jobName?: string): Promise<RunSummary[]> {
+  // `pipelineName` is the real, confirmed-live RunsFilter field for this
+  // -- Dagster kept the historical "pipeline" name in the filter even
+  // though it filters by job.
+  const filterArg = jobName ? `filter: { pipelineName: ${JSON.stringify(jobName)} }, ` : '';
   const query = `
     query DagsterPowerUserRuns {
-      runsOrError(limit: ${limit}) {
+      runsOrError(${filterArg}limit: ${limit}) {
         __typename
         ... on Runs {
           results {
