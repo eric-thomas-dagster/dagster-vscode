@@ -1,6 +1,6 @@
 # Dagster Power User
 
-A standalone VS Code extension for [Dagster](https://dagster.io) development — no external backend, no dependency on Dagster Designer. Point it at a local project, a remote Dagster OSS deployment, or Dagster+, and get asset/dbt lineage, real diagnostics, an AI assistant grounded in your actual project, and run/schedule control, all from inside the editor.
+A standalone VS Code extension for [Dagster](https://dagster.io) development — no external backend required. Point it at a local project, a remote Dagster OSS deployment, or Dagster+, and get asset/dbt lineage, real diagnostics, an AI assistant grounded in your actual project, and run/schedule control, all from inside the editor.
 
 ## Features
 
