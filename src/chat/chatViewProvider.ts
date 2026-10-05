@@ -4,7 +4,6 @@ import { hasApiKey, setApiKey } from '../ai/llmClient';
 import type { AssetIndexStore } from '../data/assetIndex';
 import type { PrimitiveIndexStore } from '../data/primitiveIndex';
 import type { SessionManager } from './sessionManager';
-import { getUsageTotals, onDidChangeUsage } from '../ai/usageTracker';
 import { getDagsterPlusUsageSummary, type DagsterPlusUsageSummary } from '../data/dagsterPlusClient';
 import { type ActiveTargetStore, describeTarget, pickTarget } from '../data/activeTarget';
 
@@ -55,13 +54,12 @@ export class DagsterExpertChatViewProvider implements vscode.WebviewViewProvider
     private readonly activeTarget: ActiveTargetStore,
     private readonly hasLocalProject: () => boolean
   ) {
-    // Sessions/usage/target can all change from OUTSIDE this webview's
-    // own messages (e.g. "New Chat"/"Chat History" run as real vscode
+    // Sessions/target can both change from OUTSIDE this webview's own
+    // messages (e.g. "New Chat"/"Chat History" run as real vscode
     // commands via the generic runCommand handler below, same as every
-    // other quick action) -- resync whenever any of them does, not just
+    // other quick action) -- resync whenever either does, not just
     // right after this view's own `ask`.
     this.sessions.onDidChange(() => this.syncState());
-    onDidChangeUsage(() => this.syncState());
     this.activeTarget.onDidChange(() => this.syncState());
   }
 
@@ -73,7 +71,6 @@ export class DagsterExpertChatViewProvider implements vscode.WebviewViewProvider
       title: session.title,
       messages: session.messages,
     });
-    void this.view.webview.postMessage({ type: 'usage', totals: getUsageTotals() });
     void this.view.webview.postMessage({
       type: 'target',
       isLocal: this.activeTarget.get().kind === 'local',
@@ -326,7 +323,6 @@ export class DagsterExpertChatViewProvider implements vscode.WebviewViewProvider
       border-bottom: 1px solid var(--vscode-sideBar-border, var(--vscode-panel-border));
     }
     #session-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    #usage-line { flex-shrink: 0; }
     #plus-usage {
       flex-shrink: 0;
       display: none;
@@ -345,32 +341,44 @@ export class DagsterExpertChatViewProvider implements vscode.WebviewViewProvider
     .bar-fill.ok { background: var(--vscode-charts-green, #3fb950); }
     .bar-fill.warning { background: var(--vscode-charts-yellow, #d29922); }
     .bar-fill.danger { background: var(--vscode-charts-red, #f85149); }
+    /* A real segmented control, not two independent buttons -- a filled
+       "pill" wrapper with the selected segment getting the SAME solid
+       button colors as the Send button elsewhere in this UI (unambiguous
+       in every theme, unlike the previous subtle-background attempt).
+       The active segment also drops :hover and the pointer cursor
+       entirely, so it can't be mistaken for "still clickable". */
     #target-tabs {
       flex-shrink: 0;
       display: flex;
       gap: 2px;
-      padding: 6px 10px 0;
+      margin: 8px 10px 0;
+      padding: 2px;
+      background: var(--vscode-input-background);
+      border-radius: 6px;
     }
     .target-tab {
       flex: 1;
       background: transparent;
       color: var(--vscode-descriptionForeground);
-      border: 1px solid var(--vscode-widget-border, transparent);
-      border-radius: 5px;
-      padding: 4px 6px;
+      border: none;
+      border-radius: 4px;
+      padding: 5px 6px;
       font-size: 0.78em;
       cursor: pointer;
-      align-self: auto;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .target-tab.active {
-      background: var(--vscode-button-secondaryBackground, var(--vscode-badge-background));
+    .target-tab:not(.active):hover {
+      background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.2));
       color: var(--vscode-foreground);
-      font-weight: 600;
     }
-    .target-tab:hover { color: var(--vscode-foreground); }
+    .target-tab.active {
+      background: var(--vscode-button-background);
+      color: var(--vscode-button-foreground);
+      font-weight: 600;
+      cursor: default;
+    }
   </style>
 </head>
 <body>
@@ -380,7 +388,6 @@ export class DagsterExpertChatViewProvider implements vscode.WebviewViewProvider
   </div>
   <div id="session-header">
     <span id="session-title">New session</span>
-    <span id="usage-line"></span>
   </div>
   <div id="plus-usage">
     <div id="plus-usage-cta">

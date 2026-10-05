@@ -6,7 +6,6 @@
   const input = document.getElementById('input');
   const sendBtn = document.getElementById('send-btn');
   const sessionTitleEl = document.getElementById('session-title');
-  const usageLineEl = document.getElementById('usage-line');
   const plusUsageEl = document.getElementById('plus-usage');
   const plusUsageCtaEl = document.getElementById('plus-usage-cta');
   const plusUsageBarEl = document.getElementById('plus-usage-bar');
@@ -211,12 +210,6 @@
     messages.forEach((m) => addMessage(m.content, m.role));
   }
 
-  function formatUsage(totals) {
-    if (!totals || totals.requestCount === 0) return '';
-    const total = totals.inputTokens + totals.outputTokens;
-    return total.toLocaleString() + ' tokens · ' + totals.requestCount + ' request' + (totals.requestCount === 1 ? '' : 's');
-  }
-
   // Per the "if they haven't connected Dagster+, we don't need to show
   // usage -- maybe a call to action" ask: 'disconnected' shows just a
   // connect link, never a zeroed-out bar. 'no-limit' (an org with no
@@ -261,8 +254,6 @@
     } else if (message.type === 'loadHistory') {
       sessionTitleEl.textContent = message.title;
       renderHistory(message.messages);
-    } else if (message.type === 'usage') {
-      usageLineEl.textContent = formatUsage(message.totals);
     } else if (message.type === 'plusUsage') {
       renderPlusUsage(message.summary);
     } else if (message.type === 'target') {

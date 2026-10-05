@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import { recordUsage } from './usageTracker';
 
 export type ChatRole = 'user' | 'assistant';
 
@@ -86,11 +85,7 @@ async function callAnthropic(apiKey: string, model: string, system: string, mess
       }
       const data = (await res.json()) as {
         content: Array<{ type: string; text?: string }>;
-        usage?: { input_tokens: number; output_tokens: number };
       };
-      if (data.usage) {
-        void recordUsage({ inputTokens: data.usage.input_tokens, outputTokens: data.usage.output_tokens });
-      }
       return data.content.find((c) => c.type === 'text')?.text ?? '';
     },
     (e) => e?.status === 429 || e?.status >= 500
@@ -119,11 +114,7 @@ async function callOpenAi(apiKey: string, model: string, system: string, message
       }
       const data = (await res.json()) as {
         choices: Array<{ message: { content: string } }>;
-        usage?: { prompt_tokens: number; completion_tokens: number };
       };
-      if (data.usage) {
-        void recordUsage({ inputTokens: data.usage.prompt_tokens, outputTokens: data.usage.completion_tokens });
-      }
       return data.choices[0]?.message?.content ?? '';
     },
     (e) => e?.status === 429 || e?.status >= 500

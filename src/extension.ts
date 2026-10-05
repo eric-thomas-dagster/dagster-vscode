@@ -31,7 +31,6 @@ import { scaffoldGithubActions } from './commands/scaffoldGithubActions';
 import { SessionManager } from './chat/sessionManager';
 import { registerChatHistoryCommands } from './commands/chatHistory';
 import { registerMoreActionsCommand } from './commands/moreActions';
-import { initUsageTracker } from './ai/usageTracker';
 import { setDagsterPlusCredentials } from './data/dagsterPlusClient';
 import { showDagsterPlusUsagePanel } from './webviews/dagsterPlusUsagePanel';
 import { registerFixCodeActionProvider } from './diagnostics/fixCodeActionProvider';
@@ -158,7 +157,6 @@ export async function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  initUsageTracker(context);
   const sessionManager = new SessionManager(context);
   context.subscriptions.push(sessionManager);
   registerChatHistoryCommands(context, sessionManager);
