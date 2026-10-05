@@ -32,9 +32,15 @@ export function registerFixDiagnosticCommand(context: vscode.ExtensionContext): 
   context.subscriptions.push(
     vscode.commands.registerCommand(
       'dagsterPowerUser.fixDiagnosticWithAi',
-      async (uri: vscode.Uri, diagnostic: vscode.Diagnostic) => {
+      async (uri: vscode.Uri, diagnostic: vscode.Diagnostic, useFullFile?: boolean) => {
         const document = await vscode.workspace.openTextDocument(uri);
-        const snippet = computeSnippetRange(document, diagnostic.range.start.line);
+        // Some edits (a new schedule/check function PLUS its registration
+        // in a Definitions(...) call elsewhere in the same file) touch two
+        // spots too far apart for the usual +/-12-line window -- callers
+        // that know this pass useFullFile instead.
+        const snippet = useFullFile
+          ? { startLine: 0, endLine: Math.max(0, document.lineCount - 1) }
+          : computeSnippetRange(document, diagnostic.range.start.line);
 
         let suggestion;
         try {

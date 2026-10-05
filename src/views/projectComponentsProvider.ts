@@ -231,6 +231,102 @@ export function registerProjectComponentsView(
         vscode.DiagnosticSeverity.Hint
       );
       await vscode.commands.executeCommand('dagsterPowerUser.fixDiagnosticWithAi', location.uri, instruction);
+    }),
+    vscode.commands.registerCommand('dagsterPowerUser.setAssetGroup', async (arg: unknown) => {
+      const key = typeof arg === 'string' ? arg : (arg as AssetTreeItem | undefined)?.info?.key;
+      if (!key) return;
+      const groupName = await vscode.window.showInputBox({
+        title: `Set group for "${key}"`,
+        prompt: 'Group name',
+        placeHolder: 'e.g. staging',
+      });
+      if (!groupName) return;
+
+      const location = await resolver.resolve(key);
+      if (!location) {
+        vscode.window.showWarningMessage(`Dagster: couldn't find "${key}" in your local source to edit.`);
+        return;
+      }
+      const isPython = location.uri.fsPath.toLowerCase().endsWith('.py');
+      const instruction = new vscode.Diagnostic(
+        location.range,
+        isPython
+          ? `Set group_name="${groupName}" on this asset (the @asset(...) decorator for asset key "${key}"). Keep every other argument exactly as-is.`
+          : `This file configures asset "${key}" via a Dagster component. Set its group: add a post_processing.assets entry with target: 'key:"${key}"', operation: merge, attributes.group_name: "${groupName}" -- create that structure (and the DefsFolderComponent type header, if this is a folder-level defs.yaml) if it doesn't exist, without removing or duplicating any existing post_processing entries.`,
+        vscode.DiagnosticSeverity.Hint
+      );
+      await vscode.commands.executeCommand('dagsterPowerUser.fixDiagnosticWithAi', location.uri, instruction);
+    }),
+    vscode.commands.registerCommand('dagsterPowerUser.addAssetToJob', async (arg: unknown) => {
+      const assetKey = typeof arg === 'string' ? arg : (arg as AssetTreeItem | undefined)?.info?.key;
+      if (!assetKey) return;
+
+      const jobs = [...primitives.getIndex().values()].filter((p) => p.kind === 'job').map((p) => p.name);
+      if (jobs.length === 0) {
+        vscode.window.showWarningMessage('Dagster: no jobs loaded to add this asset to.');
+        return;
+      }
+      const jobName = await vscode.window.showQuickPick(jobs, { title: `Add "${assetKey}" to which job?` });
+      if (!jobName) return;
+
+      const location = await resolver.resolve(jobName);
+      if (!location) {
+        vscode.window.showWarningMessage(`Dagster: couldn't find job "${jobName}" in your local source to edit.`);
+        return;
+      }
+      const instruction = new vscode.Diagnostic(
+        location.range,
+        `Add asset "${assetKey}" to this job's selection (the define_asset_job(...) call defining job "${jobName}"). Extend the existing selection however it's currently expressed (a list of strings, a selection DSL string, or an AssetSelection expression) to include this asset, without removing any assets it already selects. If there's no selection argument yet, add one containing just this asset.`,
+        vscode.DiagnosticSeverity.Hint
+      );
+      await vscode.commands.executeCommand('dagsterPowerUser.fixDiagnosticWithAi', location.uri, instruction);
+    }),
+    vscode.commands.registerCommand('dagsterPowerUser.addAssetCheck', async (arg: unknown) => {
+      const assetKey = typeof arg === 'string' ? arg : (arg as AssetTreeItem | undefined)?.info?.key;
+      if (!assetKey) return;
+
+      const description = await vscode.window.showInputBox({
+        title: `Add a check for "${assetKey}"`,
+        prompt: 'Describe the check in plain language',
+        placeHolder: 'e.g. the row count is greater than zero',
+      });
+      if (!description) return;
+
+      const location = await resolver.resolve(assetKey);
+      if (!location) {
+        vscode.window.showWarningMessage(`Dagster: couldn't find "${assetKey}" in your local source to edit.`);
+        return;
+      }
+      const instruction = new vscode.Diagnostic(
+        location.range,
+        `Add a new @asset_check(asset=..., name="...") function in this file for asset "${assetKey}" that checks: ${description}. It should return an AssetCheckResult(passed=...). Give the check function a short, descriptive name distinct from the asset's own name. If this file has a Definitions(...) or Definitions.merge(...) call with an asset_checks=[...] list, add the new check function to it; if there's no such list in this file, just add the function.`,
+        vscode.DiagnosticSeverity.Hint
+      );
+      await vscode.commands.executeCommand('dagsterPowerUser.fixDiagnosticWithAi', location.uri, instruction, true);
+    }),
+    vscode.commands.registerCommand('dagsterPowerUser.addScheduleForJob', async (arg: unknown) => {
+      const jobName = typeof arg === 'string' ? arg : (arg as { info?: PrimitiveRefInfo } | undefined)?.info?.name;
+      if (!jobName) return;
+
+      const cron = await vscode.window.showInputBox({
+        title: `Add a schedule for job "${jobName}"`,
+        prompt: 'Cron expression',
+        placeHolder: '0 6 * * *',
+        value: '0 0 * * *',
+      });
+      if (!cron) return;
+
+      const location = await resolver.resolve(jobName);
+      if (!location) {
+        vscode.window.showWarningMessage(`Dagster: couldn't find job "${jobName}" in your local source to edit.`);
+        return;
+      }
+      const instruction = new vscode.Diagnostic(
+        location.range,
+        `Add a new @schedule(job=${jobName}, cron_schedule="${cron}") function in this file that returns {} (an empty run config). Give the schedule function a short, descriptive name. If this file has a Definitions(...) or Definitions.merge(...) call with a schedules=[...] list, add the new schedule function to it; if there's no such list in this file, just add the function.`,
+        vscode.DiagnosticSeverity.Hint
+      );
+      await vscode.commands.executeCommand('dagsterPowerUser.fixDiagnosticWithAi', location.uri, instruction, true);
     })
   );
 }

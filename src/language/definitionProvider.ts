@@ -36,6 +36,12 @@ export class AssetDefinitionResolver implements vscode.Disposable {
     const identifier = (assetKey.split('/').pop() ?? assetKey).replace(/-/g, '_');
     const defRe = new RegExp(`\\bdef\\s+${escapeRegExp(identifier)}\\s*\\(`);
     const nameOverrideRe = new RegExp(`name\\s*=\\s*["']${escapeRegExp(assetKey)}["']`);
+    // `define_asset_job(...)`-style jobs are a variable assignment, not a
+    // `def <name>(` -- confirmed live (define_asset_job's own real
+    // signature has no function body of that name at all), so the first
+    // regex alone silently fails to locate the overwhelmingly common way
+    // asset jobs are actually defined.
+    const varAssignRe = new RegExp(`\\b${escapeRegExp(identifier)}\\s*=\\s*define_asset_job\\s*\\(`);
 
     const pyFiles = await vscode.workspace.findFiles(
       '**/*.py',
@@ -51,7 +57,7 @@ export class AssetDefinitionResolver implements vscode.Disposable {
       } catch {
         continue;
       }
-      const match = defRe.exec(text) ?? nameOverrideRe.exec(text);
+      const match = defRe.exec(text) ?? nameOverrideRe.exec(text) ?? varAssignRe.exec(text);
       if (match) {
         const doc = await vscode.workspace.openTextDocument(file);
         found = new vscode.Location(file, doc.positionAt(match.index));

@@ -218,6 +218,26 @@
         "command": "dagsterPowerUser.addAssetDependency",
         "title": "Dagster: Add Dependency...",
         "category": "Dagster"
+      },
+      {
+        "command": "dagsterPowerUser.setAssetGroup",
+        "title": "Dagster: Set Group...",
+        "category": "Dagster"
+      },
+      {
+        "command": "dagsterPowerUser.addAssetToJob",
+        "title": "Dagster: Add to Job...",
+        "category": "Dagster"
+      },
+      {
+        "command": "dagsterPowerUser.addAssetCheck",
+        "title": "Dagster: Add Check...",
+        "category": "Dagster"
+      },
+      {
+        "command": "dagsterPowerUser.addScheduleForJob",
+        "title": "Dagster: Add Schedule...",
+        "category": "Dagster"
       }
     ],
     "languageModelTools": [
@@ -336,6 +356,22 @@
         {
           "command": "dagsterPowerUser.addAssetDependency",
           "when": "view == dagsterPowerUser.projectComponents && viewItem == dagsterAsset"
+        },
+        {
+          "command": "dagsterPowerUser.setAssetGroup",
+          "when": "view == dagsterPowerUser.projectComponents && viewItem == dagsterAsset"
+        },
+        {
+          "command": "dagsterPowerUser.addAssetToJob",
+          "when": "view == dagsterPowerUser.projectComponents && viewItem == dagsterAsset"
+        },
+        {
+          "command": "dagsterPowerUser.addAssetCheck",
+          "when": "view == dagsterPowerUser.projectComponents && viewItem == dagsterAsset"
+        },
+        {
+          "command": "dagsterPowerUser.addScheduleForJob",
+          "when": "view == dagsterPowerUser.projectComponents && viewItem == dagsterjob"
         }
       ],
       "explorer/context": [
