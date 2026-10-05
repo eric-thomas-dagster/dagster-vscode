@@ -4,6 +4,10 @@
   "description": "Standalone Dagster development in VS Code: asset/dbt lineage, hover & go-to-definition, dg check diagnostics, AI component authoring, and a dagster-expert assistant with MCP tool access. No external backend required.",
   "version": "0.0.1",
   "publisher": "dagsterlabs",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eric-thomas-dagster/dagster-vscode.git"
+  },
   "private": true,
   "engines": {
     "vscode": "^1.95.0"

@@ -34,7 +34,7 @@ A standalone VS Code extension for [Dagster](https://dagster.io) development —
 - Remote/Dagster+ targets go through the real `launchRun` GraphQL mutation directly — no local checkout required for those two.
 
 ### Schedules & sensors
-- Start/stop schedules and sensors inline from the Dagster Definitions tree (same spot as the asset/job run buttons), or in bulk via `Dagster: Manage Schedules & Sensors` (includes a one-click "start everything that's stopped," handy right after a deploy where new schedules often come in paused).
+- Start/stop schedules and sensors inline from the Dagster Definitions tree (same spot as the asset/job run buttons), or in bulk via `Dagster: Manage Schedules & Sensors` (includes a one-click "start everything that's stopped," handy the first time a new schedule/sensor shows up — without `default_status=...RUNNING` in its decorator, Dagster itself starts it stopped the first time an instance ever sees it). This toggles live runtime state on whichever instance you're pointed at; it doesn't edit your source code.
 - Works against local, remote OSS, or Dagster+ — same mutations, different endpoint.
 
 ### Run Explorer
