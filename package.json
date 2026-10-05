@@ -13,8 +13,7 @@
   ],
   "activationEvents": [
     "workspaceContains:**/dagster.yaml",
-    "workspaceContains:**/pyproject.toml",
-    "onCommand:dagsterPowerUser.scaffoldNewProject"
+    "workspaceContains:**/pyproject.toml"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -36,7 +35,7 @@
         },
         {
           "id": "dagsterPowerUser.projectComponents",
-          "name": "Project Components",
+          "name": "Dagster Definitions",
           "visibility": "collapsed"
         },
         {

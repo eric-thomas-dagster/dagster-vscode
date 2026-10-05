@@ -120,7 +120,7 @@ export async function installComponent(component: CatalogComponent, project: Dag
     (m) => `${m[1]}: ${m[2]}`
   );
   const placeholderWarning = placeholderRefs.length
-    ? ` This references ${placeholderRefs.join(', ')} -- replace with a real asset key from this project (Project Components) before it'll validate.`
+    ? ` This references ${placeholderRefs.join(', ')} -- replace with a real asset key from this project (Dagster Definitions) before it'll validate.`
     : '';
 
   if (component.pipDependencies.length > 0) {

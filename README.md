@@ -6,9 +6,10 @@ A standalone VS Code extension for [Dagster](https://dagster.io) development —
 
 ### Project awareness
 - Multi-root workspace support with `dg` CLI-based project detection (falls back to a heuristic scan for `dagster.yaml`/`pyproject.toml`).
-- A sidebar tree (**Project Components**) of everything in the current project: assets, jobs, schedules, sensors, ops, resources, and IO managers.
+- A sidebar tree (**Dagster Definitions**) of everything at the currently active target: assets, jobs, schedules, sensors, ops, resources, and IO managers. Follows whichever target is active (see below), not just your local project.
 - Hover info and go-to-definition for asset/job/schedule/sensor references in Python and YAML.
 - Real `dg check defs` diagnostics in the Problems panel — and if a project fails to load entirely (e.g. a real import error), that's surfaced explicitly instead of silently showing "0 definitions."
+- The extension activates and its sidebar is usable even without a Dagster project open — everything that doesn't need local code (Dagster Expert chat, Dagster+ connection/usage, Remote/Dagster+ materialize/launch/runs) works regardless.
 
 ### Asset lineage
 - A dedicated graph view of your project's asset DAG (dependencies, groups, kinds, staleness).
@@ -25,8 +26,17 @@ A standalone VS Code extension for [Dagster](https://dagster.io) development —
 - Remote/Dagster+ targets go through the real `launchRun` GraphQL mutation directly — no local checkout required for those two.
 
 ### Schedules & sensors
-- Start/stop schedules and sensors inline from the Project Components tree (same spot as the asset/job run buttons), or in bulk via `Dagster: Manage Schedules & Sensors` (includes a one-click "start everything that's stopped," handy right after a deploy where new schedules often come in paused).
+- Start/stop schedules and sensors inline from the Dagster Definitions tree (same spot as the asset/job run buttons), or in bulk via `Dagster: Manage Schedules & Sensors` (includes a one-click "start everything that's stopped," handy right after a deploy where new schedules often come in paused).
 - Works against local, remote OSS, or Dagster+ — same mutations, different endpoint.
+
+### Run Explorer
+- `Dagster: Show Runs` — a target-aware list of recent runs: status, job name, duration, inline log viewing, retry, and terminate.
+- **Analyze Failure** — asks Dagster Expert to look at a failed run's real log output. If the traceback localizes to a file/line in your workspace, you get the same diff-preview Quick Fix flow as `dg check`; otherwise it's a regular chat conversation about the failure.
+- "Open in Dagster" links (on runs and on assets in the tree) deep-link straight to the real run/asset page on whichever server you're targeting.
+
+### Copilot Chat tools
+- 9 VS Code Language Model Tools (list/materialize assets, list/launch jobs, list/get-logs/terminate/retry runs, list/toggle schedules & sensors) that GitHub Copilot Chat's agent mode can call directly — no `.vscode/mcp.json` or external server needed, and it works against whichever target (Local/Remote/Dagster+) is currently active.
+- Side-effecting tools (materialize, launch, terminate, retry, toggle) require your confirmation before running, shown inline in the chat.
 
 ### Dagster+ integration
 - `Dagster: Connect Dagster+...` stores your org + API token securely (token via `SecretStorage`, org slug as a plain setting).
@@ -76,6 +86,7 @@ npm run package
 | `Dagster: Set Up Dagster+ MCP Server` | Wire Dagster+'s hosted MCP server into this workspace |
 | `Dagster: Run dg check defs` | Validate definitions, surface errors in Problems |
 | `Dagster: Ask Dagster Expert to Fix This` | Quick Fix lightbulb on a diagnostic |
+| `Dagster: Show Runs` | Run Explorer — list, view logs, retry, terminate, analyze failures |
 | `Dagster: More Actions...` | Everything else, grouped by category |
 
 ## Configuration
@@ -92,8 +103,8 @@ npm run package
 ## Architecture
 
 Two packages:
-- **Extension host** (`src/`) — all `vscode.*` API usage and outbound GraphQL/CLI calls, esbuild-bundled to `dist/extension.js`.
-- **`webview-ui/`** — Vite + React, used only for the asset lineage graph (`dist/webview/`). The chat sidebar and the Dagster+ usage panel are deliberately plain HTML/CSS/JS (`media/`), not React — simpler for what they need, and avoids extra build surface for views that are mostly text and buttons.
+- **Extension host** (`src/`) — all `vscode.*` API usage and outbound GraphQL/CLI calls, esbuild-bundled to `dist/extension.js`. `src/data/activeTarget.ts` is the one place that resolves "Local/Remote/Dagster+" into an actual URL + auth headers; `src/lm/tools.ts` registers the Copilot Chat tools.
+- **`webview-ui/`** — Vite + React, used only for the asset lineage graph (`dist/webview/`). The chat sidebar, Run Explorer, and Dagster+ usage panel are deliberately plain HTML/CSS/JS (`media/` and inline in `src/webviews/`), not React — simpler for what they need, and avoids extra build surface for views that are mostly text and buttons.
 
 Every GraphQL field and CLI flag used here was verified against a real running `dg dev` instance (or a real Dagster+ org) before being written down — not guessed from documentation.
 

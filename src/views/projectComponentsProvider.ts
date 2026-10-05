@@ -165,7 +165,7 @@ export function registerProjectComponentsView(
   assets: AssetIndexStore,
   primitives: PrimitiveIndexStore,
   resolver: AssetDefinitionResolver,
-  getGraphqlUrl: () => string
+  getActiveGraphqlUrl: () => Promise<string | undefined>
 ): void {
   const provider = new ProjectComponentsProvider(assets, primitives);
   context.subscriptions.push(
@@ -185,7 +185,12 @@ export function registerProjectComponentsView(
     vscode.commands.registerCommand('dagsterPowerUser.openAssetInDagster', async (arg: unknown) => {
       const key = typeof arg === 'string' ? arg : (arg as AssetTreeItem | undefined)?.info?.key;
       if (!key) return;
-      const url = `${deriveWebBaseUrl(getGraphqlUrl())}/assets/${key}`;
+      const graphqlUrl = await getActiveGraphqlUrl();
+      if (!graphqlUrl) {
+        vscode.window.showWarningMessage('Dagster: no target currently connected.');
+        return;
+      }
+      const url = `${deriveWebBaseUrl(graphqlUrl)}/assets/${key}`;
       await vscode.env.openExternal(vscode.Uri.parse(url));
     })
   );

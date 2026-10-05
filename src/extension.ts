@@ -115,14 +115,26 @@ export async function activate(context: vscode.ExtensionContext) {
   registerAssetHoverProvider(context, assetIndexStore, primitiveIndexStore);
   const definitionResolver = registerAssetDefinitionProvider(context, assetIndexStore, primitiveIndexStore);
   registerAssetRefDiagnostics(context, assetIndexStore);
-  registerProjectComponentsView(context, assetIndexStore, primitiveIndexStore, definitionResolver, () => devServerStatus.getGraphqlUrl());
+  registerProjectComponentsView(context, assetIndexStore, primitiveIndexStore, definitionResolver, async () => {
+    const localUrl = getPrimaryProject() ? devServerStatus.getGraphqlUrl() : '';
+    const endpoint = await resolveEndpoint(context, activeTargetStore.get(), localUrl);
+    return endpoint?.url;
+  });
 
   // Primitives refresh AFTER assets (not in parallel) -- filtering out
-  // asset-backing ops needs the asset index already populated.
+  // asset-backing ops needs the asset index already populated. Follows
+  // whichever target is ACTIVE (Local/Remote/Dagster+), not always the
+  // local dev server -- this is what the "Dagster Definitions" tree (and
+  // hover/go-to-def, which read the same two stores) actually shows, so
+  // switching targets now genuinely switches what they display instead
+  // of silently continuing to reflect local only.
   async function refreshIndexes(): Promise<void> {
-    const url = devServerStatus.getGraphqlUrl();
-    await assetIndexStore.refresh(url);
-    await primitiveIndexStore.refresh(url, new Set(assetIndexStore.getIndex().keys()));
+    const target = activeTargetStore.get();
+    const localUrl = getPrimaryProject() ? devServerStatus.getGraphqlUrl() : '';
+    const endpoint = await resolveEndpoint(context, target, localUrl);
+    if (!endpoint) return;
+    await assetIndexStore.refresh(endpoint.url, endpoint.headers);
+    await primitiveIndexStore.refresh(endpoint.url, new Set(assetIndexStore.getIndex().keys()), endpoint.headers);
   }
 
   // After installing a community component, `dg dev` doesn't necessarily
@@ -162,6 +174,10 @@ export async function activate(context: vscode.ExtensionContext) {
 
   activeTargetStore = new ActiveTargetStore(context);
   context.subscriptions.push(activeTargetStore);
+  // Switching Local/Remote/Dagster+ should actually change what the
+  // Dagster Definitions tree (and hover/go-to-def) show, not just what
+  // Materialize/Launch act on.
+  context.subscriptions.push(activeTargetStore.onDidChange(() => void refreshIndexes()));
   context.subscriptions.push(
     vscode.commands.registerCommand('dagsterPowerUser.switchTarget', async () => {
       const picked = await pickTarget(context, !!getPrimaryProject());
@@ -392,24 +408,17 @@ export async function activate(context: vscode.ExtensionContext) {
     return info?.key ?? info?.name;
   }
 
-  // The Project Components TREE only ever reflects the LOCAL dev
-  // server's index -- an inline play button there sending a locally-
-  // sourced key to a remote/Dagster+ target would silently materialize
-  // whatever that key happens to also mean over there (or nothing, or
-  // the wrong thing), so these two stay local-only and just tell you to
-  // switch targets instead. The search-based commands below this one
-  // (materializeAssetSearch/launchJobSearch) DO browse the real remote
-  // asset/job graph when the target isn't local.
+  // The Dagster Definitions tree now follows whichever target is ACTIVE
+  // (refreshIndexes() resolves it, not always local), so these two no
+  // longer need to block non-local targets -- the key/name the tree
+  // handed back genuinely came from that same target.
   context.subscriptions.push(
     vscode.commands.registerCommand('dagsterPowerUser.materializeAssetFromTree', (arg: unknown) => {
       const assetKey = extractKeyOrName(arg);
       const target = activeTargetStore.get();
       const project = getPrimaryProject();
-      if (target.kind !== 'local') {
-        vscode.window.showWarningMessage('Dagster: switch to the Local target to materialize from this tree (it only reflects your local project).');
-        return;
-      }
-      if (!assetKey || !project) {
+      if (!assetKey) return;
+      if (target.kind === 'local' && !project) {
         vscode.window.showWarningMessage('Dagster: no dg-detected project to materialize against.');
         return;
       }
@@ -419,11 +428,8 @@ export async function activate(context: vscode.ExtensionContext) {
       const jobName = extractKeyOrName(arg);
       const target = activeTargetStore.get();
       const project = getPrimaryProject();
-      if (target.kind !== 'local') {
-        vscode.window.showWarningMessage('Dagster: switch to the Local target to launch from this tree (it only reflects your local project).');
-        return;
-      }
-      if (!jobName || !project) {
+      if (!jobName) return;
+      if (target.kind === 'local' && !project) {
         vscode.window.showWarningMessage('Dagster: no dg-detected project to launch against.');
         return;
       }

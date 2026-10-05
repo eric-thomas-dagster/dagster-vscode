@@ -31,7 +31,7 @@ const MORE_ACTIONS_COMMAND = 'dagsterPowerUser.showMoreActions';
 
 /**
  * The sidebar chat view -- docked under the same Activity Bar icon as
- * Project Components, same idea as Claude Code's own panel. Plain
+ * Dagster Definitions, same idea as Claude Code's own panel. Plain
  * inline HTML/CSS styled off VS Code's own `--vscode-*` theme variables
  * (a simple message list + input box doesn't need a component
  * framework); client-side JS lives in media/chatView.js as a real file

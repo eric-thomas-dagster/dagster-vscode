@@ -32,9 +32,9 @@ export class AssetIndexStore implements vscode.Disposable {
     return this.lastError;
   }
 
-  async refresh(graphqlUrl: string): Promise<void> {
+  async refresh(graphqlUrl: string, headers?: Record<string, string>): Promise<void> {
     try {
-      const summary = await fetchAssetGraph(graphqlUrl);
+      const summary = await fetchAssetGraph(graphqlUrl, headers);
       const next = new Map<string, AssetRefInfo>();
       for (const n of summary.nodes) {
         const info: AssetRefInfo = {

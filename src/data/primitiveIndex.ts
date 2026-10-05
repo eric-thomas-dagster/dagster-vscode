@@ -38,9 +38,9 @@ export class PrimitiveIndexStore implements vscode.Disposable {
     return this.lastError;
   }
 
-  async refresh(graphqlUrl: string, knownAssetKeys: ReadonlySet<string>): Promise<void> {
+  async refresh(graphqlUrl: string, knownAssetKeys: ReadonlySet<string>, headers?: Record<string, string>): Promise<void> {
     try {
-      const primitives = await fetchPrimitives(graphqlUrl, knownAssetKeys);
+      const primitives = await fetchPrimitives(graphqlUrl, knownAssetKeys, headers);
       const next = new Map<string, PrimitiveRefInfo>();
       for (const p of primitives) {
         next.set(p.name, {
