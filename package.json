@@ -203,6 +203,11 @@
         "command": "dagsterPowerUser.showLoadError",
         "title": "Dagster: Show Load Error",
         "category": "Dagster"
+      },
+      {
+        "command": "dagsterPowerUser.setDefaultStatusInCode",
+        "title": "Dagster: Set Default Status in Code",
+        "category": "Dagster"
       }
     ],
     "languageModelTools": [

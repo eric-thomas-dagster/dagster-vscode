@@ -190,18 +190,45 @@ export async function activate(context: vscode.ExtensionContext) {
 
   registerLanguageModelTools(context, activeTargetStore, () => (getPrimaryProject() ? devServerStatus.getGraphqlUrl() : undefined));
 
-  async function toggleAutomationFromTree(treeItem: { info?: PrimitiveRefInfo }, target: 'start' | 'stop'): Promise<void> {
+  async function toggleAutomationFromTree(treeItem: { info?: PrimitiveRefInfo }, toggle: 'start' | 'stop'): Promise<void> {
     const info = treeItem?.info;
     if (!info?.id || !info.repositoryName || !info.repositoryLocationName) return;
-    const url = devServerStatus.getGraphqlUrl();
+    const target = activeTargetStore.get();
+    const localUrl = getPrimaryProject() ? devServerStatus.getGraphqlUrl() : '';
+    const endpoint = await resolveEndpoint(context, target, localUrl);
+    if (!endpoint) {
+      vscode.window.showWarningMessage('Dagster: no target currently connected.');
+      return;
+    }
     const selector = { repositoryName: info.repositoryName, repositoryLocationName: info.repositoryLocationName, name: info.name };
     try {
-      if (target === 'stop') {
-        await (info.kind === 'schedule' ? stopSchedule(url, info.id) : stopSensor(url, info.id));
+      if (toggle === 'stop') {
+        await (info.kind === 'schedule' ? stopSchedule(endpoint.url, info.id, endpoint.headers) : stopSensor(endpoint.url, info.id, endpoint.headers));
       } else {
-        await (info.kind === 'schedule' ? startSchedule(url, selector) : startSensor(url, selector));
+        await (info.kind === 'schedule'
+          ? startSchedule(endpoint.url, selector, endpoint.headers)
+          : startSensor(endpoint.url, selector, endpoint.headers));
       }
       await refreshIndexes();
+
+      // This only ever flips LIVE runtime state -- Dagster's own
+      // default_status=... in the decorator is a separate, code-level
+      // setting that only governs the first time an instance ever sees
+      // this name. Offer to update that too, as a deliberate, separate,
+      // AI-proposed-diff step rather than silently editing source on
+      // every toggle.
+      const choice = await vscode.window.showInformationMessage(
+        `Dagster: ${info.name} ${toggle === 'start' ? 'started' : 'stopped'}.`,
+        'Also Set as Code Default'
+      );
+      if (choice === 'Also Set as Code Default') {
+        await vscode.commands.executeCommand(
+          'dagsterPowerUser.setDefaultStatusInCode',
+          info.name,
+          info.kind,
+          toggle === 'start' ? 'RUNNING' : 'STOPPED'
+        );
+      }
     } catch (e) {
       vscode.window.showErrorMessage(`Dagster: ${e instanceof Error ? e.message : String(e)}`);
     }
@@ -213,6 +240,28 @@ export async function activate(context: vscode.ExtensionContext) {
     ),
     vscode.commands.registerCommand('dagsterPowerUser.stopAutomationFromTree', (treeItem: { info?: PrimitiveRefInfo }) =>
       toggleAutomationFromTree(treeItem, 'stop')
+    ),
+    vscode.commands.registerCommand(
+      'dagsterPowerUser.setDefaultStatusInCode',
+      async (name: string, kind: 'schedule' | 'sensor', desiredStatus: 'RUNNING' | 'STOPPED') => {
+        const location = await definitionResolver.resolve(name);
+        if (!location) {
+          vscode.window.showWarningMessage(`Dagster: couldn't find "${name}" in your local source to edit.`);
+          return;
+        }
+        const enumName = kind === 'schedule' ? 'DefaultScheduleStatus' : 'DefaultSensorStatus';
+        // Reuses the exact same suggest-a-fix + diff-preview + Apply/
+        // Discard flow as the dg check Quick Fix and the run-failure
+        // analyzer -- a synthetic Diagnostic carrying the instruction
+        // instead of a real error is the same trick analyzeRunFailure
+        // already uses.
+        const instruction = new vscode.Diagnostic(
+          location.range,
+          `Add or update default_status=${enumName}.${desiredStatus} on this ${kind}'s decorator (@${kind}(...)). Add "from dagster import ${enumName}" (or extend an existing dagster import) if it isn't already imported. Keep every other argument exactly as-is.`,
+          vscode.DiagnosticSeverity.Hint
+        );
+        await vscode.commands.executeCommand('dagsterPowerUser.fixDiagnosticWithAi', location.uri, instruction);
+      }
     )
   );
 
