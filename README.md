@@ -4,16 +4,11 @@ A standalone VS Code extension for [Dagster](https://dagster.io) development —
 
 ![Dagster Expert chat sidebar, with Local/Remote target tabs, quick actions, and the Dagster Definitions tree](docs/images/chat-sidebar.png)
 
-<details>
-<summary>More screenshots</summary>
-
 **Everything, grouped by category:**
 ![More Actions menu](docs/images/more-actions.png)
 
 **Live docs search:**
 ![Search Dagster Docs](docs/images/search-docs.png)
-
-</details>
 
 ## Features
 
