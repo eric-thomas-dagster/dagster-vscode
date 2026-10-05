@@ -444,11 +444,13 @@ export async function startSchedule(
 ): Promise<void> {
   await postGraphQL(
     graphqlUrl,
-    `mutation { startSchedule(scheduleSelector: ${JSON.stringify({
-      repositoryName: selector.repositoryName,
-      repositoryLocationName: selector.repositoryLocationName,
-      scheduleName: selector.name,
-    })}) { __typename } }`,
+    `mutation {
+      startSchedule(scheduleSelector: {
+        repositoryName: ${JSON.stringify(selector.repositoryName)}
+        repositoryLocationName: ${JSON.stringify(selector.repositoryLocationName)}
+        scheduleName: ${JSON.stringify(selector.name)}
+      }) { __typename }
+    }`,
     10000,
     headers
   );
@@ -465,11 +467,13 @@ export async function startSensor(
 ): Promise<void> {
   await postGraphQL(
     graphqlUrl,
-    `mutation { startSensor(sensorSelector: ${JSON.stringify({
-      repositoryName: selector.repositoryName,
-      repositoryLocationName: selector.repositoryLocationName,
-      sensorName: selector.name,
-    })}) { __typename } }`,
+    `mutation {
+      startSensor(sensorSelector: {
+        repositoryName: ${JSON.stringify(selector.repositoryName)}
+        repositoryLocationName: ${JSON.stringify(selector.repositoryLocationName)}
+        sensorName: ${JSON.stringify(selector.name)}
+      }) { __typename }
+    }`,
     10000,
     headers
   );
