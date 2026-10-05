@@ -2,6 +2,19 @@
 
 A standalone VS Code extension for [Dagster](https://dagster.io) development — no external backend required. Point it at a local project, a remote Dagster OSS deployment, or Dagster+, and get asset/dbt lineage, real diagnostics, an AI assistant grounded in your actual project, and run/schedule control, all from inside the editor.
 
+![Dagster Expert chat sidebar, with Local/Remote target tabs, quick actions, and the Dagster Definitions tree](docs/images/chat-sidebar.png)
+
+<details>
+<summary>More screenshots</summary>
+
+**Everything, grouped by category:**
+![More Actions menu](docs/images/more-actions.png)
+
+**Live docs search:**
+![Search Dagster Docs](docs/images/search-docs.png)
+
+</details>
+
 ## Features
 
 ### Project awareness
