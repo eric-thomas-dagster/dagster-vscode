@@ -292,7 +292,13 @@ export async function fetchPrimitives(
       // with no explicit job -- confirmed live, not a real user-defined
       // job, so showing it as one would just be confusing noise.
       if (j.name === '__ASSET_JOB') continue;
-      primitives.push({ kind: 'job', name: j.name, description: j.description });
+      primitives.push({
+        kind: 'job',
+        name: j.name,
+        description: j.description,
+        repositoryName: repo.name,
+        repositoryLocationName: repo.location.name,
+      });
     }
     for (const s of repo.schedules) {
       primitives.push({

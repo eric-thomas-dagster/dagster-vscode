@@ -208,12 +208,20 @@ export function registerProjectComponentsView(
       };
       const segment = pathByKind[info.kind];
       if (!segment) return;
+      if (!info.repositoryLocationName) {
+        vscode.window.showWarningMessage(`Dagster: no code location known for "${info.name}" -- try refreshing the index.`);
+        return;
+      }
       const graphqlUrl = await getActiveGraphqlUrl();
       if (!graphqlUrl) {
         vscode.window.showWarningMessage('Dagster: no target currently connected.');
         return;
       }
-      const url = `${deriveWebBaseUrl(graphqlUrl)}/${segment}/${info.name}`;
+      // Confirmed live (and corrected after a real test): jobs/schedules/
+      // sensors are scoped under their code location in the Dagster UI --
+      // a bare /jobs/<name> is NOT the real route, unlike /runs/<id> and
+      // /assets/<path> which aren't location-scoped.
+      const url = `${deriveWebBaseUrl(graphqlUrl)}/locations/${info.repositoryLocationName}/${segment}/${info.name}`;
       await vscode.env.openExternal(vscode.Uri.parse(url));
     }),
     vscode.commands.registerCommand('dagsterPowerUser.addAssetDependency', async (arg: unknown) => {
