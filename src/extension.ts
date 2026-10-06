@@ -126,7 +126,8 @@ export async function activate(context: vscode.ExtensionContext) {
       const endpoint = await resolveEndpoint(context, activeTargetStore.get(), localUrl);
       return endpoint?.url;
     },
-    getPrimaryProject
+    getPrimaryProject,
+    () => reloadAndRefresh()
   );
 
   // Primitives refresh AFTER assets (not in parallel) -- filtering out

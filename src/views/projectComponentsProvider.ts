@@ -203,7 +203,8 @@ export function registerProjectComponentsView(
   primitives: PrimitiveIndexStore,
   resolver: AssetDefinitionResolver,
   getActiveGraphqlUrl: () => Promise<string | undefined>,
-  getPrimaryProject: () => DagsterProject | undefined
+  getPrimaryProject: () => DagsterProject | undefined,
+  reloadAndRefresh: () => Promise<void>
 ): void {
   const provider = new ProjectComponentsProvider(assets, primitives);
   context.subscriptions.push(
@@ -447,6 +448,7 @@ export function registerProjectComponentsView(
               vscode.DiagnosticSeverity.Hint
             );
             await vscode.commands.executeCommand('dagsterPowerUser.fixDiagnosticWithAi', installedFile, instruction, true);
+            void reloadAndRefresh();
             return;
           }
         } else if (choice !== 'Just Write Python') {
@@ -632,6 +634,12 @@ export function registerProjectComponentsView(
       vscode.window.showInformationMessage(
         `Dagster: added "${checkType.label}" check for "${assetKey}" -- run "Dagster: Run dg check defs" to validate.`
       );
+      // `dg dev` doesn't reliably notice a component YAML edit on its
+      // own -- confirmed live (a freshly-added schedule/check silently
+      // missing from the tree until a manual reload) -- so force one,
+      // same as the Community Components catalog's own install flow
+      // already does.
+      void reloadAndRefresh();
       return;
     }
 
@@ -662,6 +670,7 @@ export function registerProjectComponentsView(
     vscode.window.showInformationMessage(
       `Dagster: added "${checkType.label}" check for "${assetKey}" -- run "Dagster: Run dg check defs" to validate.`
     );
+    void reloadAndRefresh();
   }
 
   function yamlTagsBlock(raw: string): string {
@@ -766,6 +775,7 @@ export function registerProjectComponentsView(
     vscode.window.showInformationMessage(
       `Dagster: created schedule "${scheduleName}" -- run "Dagster: Run dg check defs" to validate.`
     );
+    void reloadAndRefresh();
   }
 
   async function promptAndScaffoldSchedule(
