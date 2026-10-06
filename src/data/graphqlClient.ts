@@ -336,6 +336,17 @@ export async function fetchPrimitives(
       if (knownAssetKeys.has(name)) continue;
       const isCheckBackingOp = [...knownAssetKeys].some((key) => name.startsWith(`${key}_`));
       if (isCheckBackingOp) continue;
+      // A check built via one of Dagster's own factory helpers (e.g.
+      // build_column_schema_change_checks) doesn't get the "<asset_key>_
+      // <check_name>" treatment above -- it can't, since the whole point
+      // of the factory is the caller never names the check. Confirmed
+      // empirically (built one directly against a real installed
+      // `dagster` package and inspected its node_def.name): Dagster names
+      // its backing op "asset_check_<hex>" itself in that case. A real
+      // user-written @op could theoretically collide with this, but a
+      // literal hex-suffixed "asset_check_" name is exactly Dagster's own
+      // internal convention, not something anyone would choose by hand.
+      if (/^asset_check_[0-9a-f]{6,}$/.test(name)) continue;
       primitives.push({ kind: 'op', name, description: op.definition.description });
     }
     primitives.push(...(await fetchResourcesForRepo(graphqlUrl, repo.name, repo.location.name, headers)));
