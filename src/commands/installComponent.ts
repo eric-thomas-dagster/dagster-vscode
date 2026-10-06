@@ -6,7 +6,7 @@ import { runInTerminal } from '../util/terminalRun';
 /** The example.yaml's `type:` value is `<original_module_path>.<ClassName>`
  * (confirmed live against a real sample) -- the class name is always its
  * last dotted segment. */
-function extractClassName(exampleYaml: string): string | null {
+export function extractClassName(exampleYaml: string): string | null {
   const match = exampleYaml.match(/^type:\s*(\S+)/m);
   if (!match) return null;
   const parts = match[1].split('.');

@@ -3,6 +3,9 @@ import type { AssetIndexStore, AssetRefInfo } from '../data/assetIndex';
 import type { PrimitiveIndexStore, PrimitiveRefInfo } from '../data/primitiveIndex';
 import type { AssetDefinitionResolver } from '../language/definitionProvider';
 import { deriveWebBaseUrl } from '../data/graphqlClient';
+import type { DagsterProject } from '../projectDetection';
+import { fetchComponentCatalog } from '../data/componentCatalog';
+import { installComponent, extractClassName } from '../commands/installComponent';
 
 /**
  * Sidebar tree of everything the current dev server knows about --
@@ -165,7 +168,8 @@ export function registerProjectComponentsView(
   assets: AssetIndexStore,
   primitives: PrimitiveIndexStore,
   resolver: AssetDefinitionResolver,
-  getActiveGraphqlUrl: () => Promise<string | undefined>
+  getActiveGraphqlUrl: () => Promise<string | undefined>,
+  getPrimaryProject: () => DagsterProject | undefined
 ): void {
   const provider = new ProjectComponentsProvider(assets, primitives);
   context.subscriptions.push(
@@ -330,9 +334,7 @@ export function registerProjectComponentsView(
       // schema.json/example.yaml (fetched from the same GitHub repo the
       // Component Catalog already indexes). Prefer it over scaffolding a
       // raw @asset_check Python function whenever it's actually present.
-      const eqcFile = await findExistingComponentFile(
-        'dagster_component_templates.EnhancedDataQualityChecks'
-      );
+      const eqcFile = await findExistingComponentFile('EnhancedDataQualityChecks');
       if (eqcFile) {
         const instruction = new vscode.Diagnostic(
           new vscode.Range(0, 0, 0, 0),
@@ -341,6 +343,32 @@ export function registerProjectComponentsView(
         );
         await vscode.commands.executeCommand('dagsterPowerUser.fixDiagnosticWithAi', eqcFile, instruction, true);
         return;
+      }
+
+      // Not installed yet -- it's a real, installable catalog component
+      // (same one the Component Catalog view already lists), so offer
+      // that instead of silently defaulting to the harder raw-Python path.
+      const project = getPrimaryProject();
+      if (project) {
+        const choice = await vscode.window.showInformationMessage(
+          'Dagster: no data-quality-check component installed in this project yet.',
+          'Install Enhanced Data Quality Checks',
+          'Just Write Python'
+        );
+        if (choice === 'Install Enhanced Data Quality Checks') {
+          const installedFile = await installCatalogComponentAndLocate(context, project, 'enhanced_data_quality_checks');
+          if (installedFile) {
+            const instruction = new vscode.Diagnostic(
+              new vscode.Range(0, 0, 0, 0),
+              `This file was just installed from a template and still has its EXAMPLE attributes.assets entries (placeholder asset keys that don't exist in this project, e.g. RAW_DATA.users). Remove those example entries, then add a new data-quality check for the real asset "${assetKey}" under attributes.assets["${assetKey}"], verifying: ${description}. Pick whichever check type best fits -- available types include row_count_check, null_check, data_type_check, range_check, static_threshold, anomaly_detection, percent_delta, uniqueness_check, custom_sql_check, pattern_matching, value_set_validation, entropy_analysis, correlation_check, each taking a list of named check configs (see the example entries you're removing for the exact shape before you remove them).`,
+              vscode.DiagnosticSeverity.Hint
+            );
+            await vscode.commands.executeCommand('dagsterPowerUser.fixDiagnosticWithAi', installedFile, instruction, true);
+            return;
+          }
+        } else if (choice !== 'Just Write Python') {
+          return; // dismissed
+        }
       }
 
       const location = await resolver.resolve(assetKey);
@@ -373,10 +401,17 @@ export function registerProjectComponentsView(
     })
   );
 
-  /** Cheap, bounded scan for a `defs.yaml` already configuring a given
-   * component type anywhere in the workspace -- same technique
+  /** Cheap, bounded scan for a `defs.yaml` already configuring a component
+   * by CLASS NAME (not the manifest's original `dagster_component_
+   * templates.X` module path) -- installComponent() rewrites `type:` to
+   * the target project's own module path when it copies a catalog
+   * component in (confirmed in its own source: `${rootModule}.components.
+   * ${component.id}.${className}`), so an already-installed instance
+   * never literally contains the original path, only the class name as
+   * the type's last dotted segment. Same scan technique
    * AssetDefinitionResolver already uses for its own YAML fallback. */
-  async function findExistingComponentFile(componentType: string): Promise<vscode.Uri | undefined> {
+  async function findExistingComponentFile(className: string): Promise<vscode.Uri | undefined> {
+    const typeRe = new RegExp(`^type:\\s*\\S*\\.${className}\\s*$`, 'm');
     const yamlFiles = await vscode.workspace.findFiles(
       '**/defs.yaml',
       '**/{node_modules,.venv,venv,__pycache__,.git,dbt_packages,target}/**',
@@ -385,12 +420,43 @@ export function registerProjectComponentsView(
     for (const file of yamlFiles) {
       try {
         const text = Buffer.from(await vscode.workspace.fs.readFile(file)).toString('utf8');
-        if (text.includes(componentType)) return file;
+        if (typeRe.test(text)) return file;
       } catch {
         continue;
       }
     }
     return undefined;
+  }
+
+  /** Installs a catalog component by id (reusing the exact same
+   * installComponent() flow the Community Components view uses --
+   * same collision checks, same dependency-install prompt), then
+   * re-scans to find the file it just wrote. installComponent() doesn't
+   * return the written path itself, but re-scanning is simplest and
+   * avoids changing its signature/risking its already-tested behavior. */
+  async function installCatalogComponentAndLocate(
+    ctx: vscode.ExtensionContext,
+    project: DagsterProject,
+    componentId: string
+  ): Promise<vscode.Uri | undefined> {
+    const catalog = await fetchComponentCatalog(ctx);
+    const component = catalog.find((c) => c.id === componentId);
+    if (!component) {
+      vscode.window.showErrorMessage(`Dagster: "${componentId}" isn't in the component catalog.`);
+      return undefined;
+    }
+    let exampleYaml: string;
+    try {
+      exampleYaml = await (await fetch(component.exampleUrl)).text();
+    } catch (e) {
+      vscode.window.showErrorMessage(`Dagster: couldn't fetch "${component.name}": ${e instanceof Error ? e.message : e}`);
+      return undefined;
+    }
+    const className = extractClassName(exampleYaml);
+    if (!className) return undefined;
+
+    await installComponent(component, project);
+    return findExistingComponentFile(className);
   }
 
   async function promptAndScaffoldSchedule(

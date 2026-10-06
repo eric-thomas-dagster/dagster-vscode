@@ -115,11 +115,18 @@ export async function activate(context: vscode.ExtensionContext) {
   registerAssetHoverProvider(context, assetIndexStore, primitiveIndexStore);
   const definitionResolver = registerAssetDefinitionProvider(context, assetIndexStore, primitiveIndexStore);
   registerAssetRefDiagnostics(context, assetIndexStore);
-  registerProjectComponentsView(context, assetIndexStore, primitiveIndexStore, definitionResolver, async () => {
-    const localUrl = getPrimaryProject() ? devServerStatus.getGraphqlUrl() : '';
-    const endpoint = await resolveEndpoint(context, activeTargetStore.get(), localUrl);
-    return endpoint?.url;
-  });
+  registerProjectComponentsView(
+    context,
+    assetIndexStore,
+    primitiveIndexStore,
+    definitionResolver,
+    async () => {
+      const localUrl = getPrimaryProject() ? devServerStatus.getGraphqlUrl() : '';
+      const endpoint = await resolveEndpoint(context, activeTargetStore.get(), localUrl);
+      return endpoint?.url;
+    },
+    getPrimaryProject
+  );
 
   // Primitives refresh AFTER assets (not in parallel) -- filtering out
   // asset-backing ops needs the asset index already populated. Follows
