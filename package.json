@@ -35,7 +35,8 @@
         {
           "type": "webview",
           "id": "dagsterPowerUser.chat",
-          "name": "Dagster Expert"
+          "name": "Dagster Expert",
+          "visibility": "collapsed"
         },
         {
           "id": "dagsterPowerUser.projectComponents",
@@ -258,6 +259,12 @@
         "command": "dagsterPowerUser.openAssetCheckInDagster",
         "title": "Dagster: Open in Dagster",
         "category": "Dagster"
+      },
+      {
+        "command": "dagsterPowerUser.openChatPanel",
+        "title": "Dagster: Open Dagster Expert in Editor Tab",
+        "category": "Dagster",
+        "icon": "$(link-external)"
       }
     ],
     "languageModelTools": [
@@ -417,6 +424,13 @@
       }
     ],
     "menus": {
+      "view/title": [
+        {
+          "command": "dagsterPowerUser.openChatPanel",
+          "when": "view == dagsterPowerUser.chat",
+          "group": "navigation"
+        }
+      ],
       "view/item/context": [
         {
           "command": "dagsterPowerUser.materializeAssetFromTree",

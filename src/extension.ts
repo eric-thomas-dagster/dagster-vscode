@@ -22,6 +22,7 @@ import { registerAssetRefDiagnostics } from './diagnostics/assetRefDiagnostics';
 import { registerDgCheckDiagnostics, DgCheckDiagnostics } from './diagnostics/dgCheckDiagnostics';
 import { registerProjectComponentsView } from './views/projectComponentsProvider';
 import { DagsterExpertChatViewProvider } from './chat/chatViewProvider';
+import { showDagsterExpertChatPanel } from './chat/chatPanel';
 import { setApiKey } from './ai/llmClient';
 import { scaffoldNewProject } from './commands/scaffoldProject';
 import { registerComponentCatalogView } from './views/componentCatalogProvider';
@@ -397,7 +398,21 @@ export async function activate(context: vscode.ExtensionContext) {
   );
   context.subscriptions.push(
     vscode.commands.registerCommand('dagsterPowerUser.setAnthropicApiKey', () => setApiKey(context, 'anthropic')),
-    vscode.commands.registerCommand('dagsterPowerUser.setOpenAiApiKey', () => setApiKey(context, 'openai'))
+    vscode.commands.registerCommand('dagsterPowerUser.setOpenAiApiKey', () => setApiKey(context, 'openai')),
+    // The sidebar view's own "pop out" button (view/title nav icon) --
+    // same session data, same chat, just with a visible session-list rail
+    // instead of the sidebar's single-conversation view + QuickPick
+    // history, for when the cramped sidebar isn't enough room.
+    vscode.commands.registerCommand('dagsterPowerUser.openChatPanel', () => {
+      showDagsterExpertChatPanel(
+        context,
+        assetIndexStore,
+        primitiveIndexStore,
+        sessionManager,
+        activeTargetStore,
+        () => !!getPrimaryProject()
+      );
+    })
   );
   context.subscriptions.push(
     devServerStatus.onDidChangeRunning((running) => {

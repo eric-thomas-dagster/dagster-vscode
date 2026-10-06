@@ -14,7 +14,75 @@
   const plusBarTextEl = document.getElementById('plus-bar-text');
   const targetLocalEl = document.getElementById('target-local');
   const targetRemoteEl = document.getElementById('target-remote');
+  // Only present in the editor-tab panel's HTML -- the sidebar view has
+  // no rail markup, so every lookup below comes back null there and every
+  // function that touches these is written to no-op gracefully.
+  const railListEl = document.getElementById('rail-list');
+  const railNewBtnEl = document.getElementById('rail-new-btn');
   let thinkingEl = null;
+
+  if (railNewBtnEl) {
+    railNewBtnEl.addEventListener('click', () => {
+      vscode.postMessage({ type: 'newSessionInline' });
+    });
+  }
+
+  function formatRelativeTime(ms) {
+    const diffSeconds = Math.max(0, (Date.now() - ms) / 1000);
+    if (diffSeconds < 60) return 'just now';
+    if (diffSeconds < 3600) return Math.round(diffSeconds / 60) + 'm ago';
+    if (diffSeconds < 86400) return Math.round(diffSeconds / 3600) + 'h ago';
+    return Math.round(diffSeconds / 86400) + 'd ago';
+  }
+
+  // Full re-render on every 'sessionList' message -- the list is short
+  // (a QuickPick-scale history, not a paginated feed), so there's no need
+  // for incremental DOM patching here.
+  function renderSessionList(sessions, activeId) {
+    if (!railListEl) return;
+    railListEl.innerHTML = '';
+    sessions.forEach((s) => {
+      const item = document.createElement('div');
+      item.className = 'rail-item' + (s.id === activeId ? ' active' : '') + (s.archived ? ' archived' : '');
+      item.addEventListener('click', () => {
+        if (s.id !== activeId) vscode.postMessage({ type: 'switchSession', id: s.id });
+      });
+
+      const title = document.createElement('div');
+      title.className = 'rail-item-title';
+      title.textContent = s.title;
+      item.appendChild(title);
+
+      const meta = document.createElement('div');
+      meta.className = 'rail-item-meta';
+      meta.textContent = s.messageCount + ' msg' + (s.messageCount === 1 ? '' : 's') + ' · ' + formatRelativeTime(s.updatedAt);
+      item.appendChild(meta);
+
+      const actions = document.createElement('div');
+      actions.className = 'rail-item-actions';
+
+      const archiveIcon = document.createElement('i');
+      archiveIcon.className = 'codicon codicon-' + (s.archived ? 'inbox' : 'archive');
+      archiveIcon.title = s.archived ? 'Unarchive' : 'Archive';
+      archiveIcon.addEventListener('click', (e) => {
+        e.stopPropagation();
+        vscode.postMessage({ type: 'archiveSessionInline', id: s.id, archived: !s.archived });
+      });
+      actions.appendChild(archiveIcon);
+
+      const deleteIcon = document.createElement('i');
+      deleteIcon.className = 'codicon codicon-trash';
+      deleteIcon.title = 'Delete';
+      deleteIcon.addEventListener('click', (e) => {
+        e.stopPropagation();
+        vscode.postMessage({ type: 'deleteSessionInline', id: s.id });
+      });
+      actions.appendChild(deleteIcon);
+
+      item.appendChild(actions);
+      railListEl.appendChild(item);
+    });
+  }
 
   document.getElementById('set-key-btn').addEventListener('click', () => {
     vscode.postMessage({ type: 'setKey' });
@@ -258,6 +326,8 @@
       renderPlusUsage(message.summary);
     } else if (message.type === 'target') {
       renderTarget(message.isLocal, message.label);
+    } else if (message.type === 'sessionList') {
+      renderSessionList(message.sessions, message.activeId);
     } else if (message.type === 'answer') {
       hideThinking();
       setBusy(false);

@@ -14,6 +14,26 @@ export interface ChatSession {
   archived: boolean;
 }
 
+/** The `sessionList` postMessage payload shared by both chat hosts (the
+ * sidebar view and the editor-tab panel) -- summarized (no full message
+ * bodies; the rail only ever needs title/count/recency) so switching
+ * sessions doesn't ship every session's entire transcript on every sync. */
+export function sessionListMessage(sessions: ChatSession[], activeId: string) {
+  return {
+    type: 'sessionList' as const,
+    activeId,
+    sessions: [...sessions]
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .map((s) => ({
+        id: s.id,
+        title: s.title,
+        updatedAt: s.updatedAt,
+        messageCount: s.messages.length,
+        archived: s.archived,
+      })),
+  };
+}
+
 function makeId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
