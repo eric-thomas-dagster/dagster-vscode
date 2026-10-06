@@ -1,11 +1,18 @@
-/** CSS shared by both chat hosts -- the sidebar WebviewView
- * (chatViewProvider.ts) and the editor-tab WebviewPanel (chatPanel.ts).
- * Deliberately excludes each host's own top-level layout rule (`body` and
- * whatever wraps the session-rail in the tab version) since those two
- * genuinely differ; everything else (bubbles, quick actions, target tabs,
- * Dagster+ usage bar) is identical and was a straight extraction from the
- * sidebar view's original inline <style> block, kept in one place so a
- * fix/tweak doesn't need to happen twice. */
+/** CSS/markup shared pieces for the two chat surfaces:
+ *  - the sidebar WebviewView (chatViewProvider.ts) -- target switch,
+ *    Dagster+ usage, quick actions, and now the session list/rail itself
+ *    (no conversation UI at all anymore -- picking a session opens it as
+ *    its own editor tab, same idea as Claude Code's own session manager
+ *    sidebar + separate chat tabs).
+ *  - the per-session editor-tab WebviewPanel (chatPanel.ts) -- just the
+ *    conversation (title, messages, key banner, input). One tab per
+ *    open session; VS Code's own tab bar is what lets you flip between
+ *    them, so there's no in-webview rail here at all.
+ * CHAT_SHARED_CSS covers everything that looks identical in both
+ * (bubbles, buttons) plus the few rules now used by only one side
+ * (quick actions/target tabs/rail -- sidebar; messages/input -- tab) --
+ * kept in one place either way so a tweak doesn't need to happen twice
+ * if the two ever grow a real overlap again. */
 export const CHAT_SHARED_CSS = `
     * { box-sizing: border-box; }
     #quick-actions {
@@ -197,21 +204,59 @@ export const CHAT_SHARED_CSS = `
       font-weight: 600;
       cursor: default;
     }
+    #rail-new-btn {
+      margin: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      align-self: auto;
+      width: calc(100% - 16px);
+    }
+    #rail-list { flex: 1; overflow-y: auto; }
+    .rail-item {
+      position: relative;
+      padding: 8px 32px 8px 10px;
+      cursor: pointer;
+      border-bottom: 1px solid var(--vscode-widget-border, transparent);
+    }
+    .rail-item:hover { background: var(--vscode-list-hoverBackground); }
+    .rail-item.active {
+      background: var(--vscode-list-activeSelectionBackground);
+      color: var(--vscode-list-activeSelectionForeground);
+    }
+    .rail-item-title {
+      font-size: 0.85em;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .rail-item.archived .rail-item-title { opacity: 0.6; font-style: italic; }
+    .rail-item-meta {
+      font-size: 0.72em;
+      opacity: 0.7;
+      margin-top: 2px;
+    }
+    .rail-item-actions {
+      position: absolute;
+      right: 6px;
+      top: 8px;
+      display: none;
+      gap: 6px;
+    }
+    .rail-item:hover .rail-item-actions { display: flex; }
+    .rail-item-actions .codicon { cursor: pointer; opacity: 0.75; font-size: 13px; }
+    .rail-item-actions .codicon:hover { opacity: 1; }
 `;
 
-/** The full chat body -- target tabs, session header, Dagster+ usage,
- * quick actions, message list, key banner, input row. Used by the
- * sidebar view only; the editor-tab panel uses the minimal variant below
- * instead (its own session rail already covers what the extra chrome here
- * was for). */
-export function renderFullChatBodyHtml(actionButtonsHtml: string): string {
+/** The sidebar's body: target switch, Dagster+ usage, quick actions, then
+ * the session list filling the rest of the space. No conversation UI at
+ * all -- clicking a session opens/focuses its own editor tab instead. */
+export function renderSidebarBodyHtml(actionButtonsHtml: string): string {
   return `
   <div id="target-tabs">
     <button class="target-tab" id="target-local" title="Run against your local dev server">Local</button>
     <button class="target-tab" id="target-remote" title="Run against a remote Dagster OSS server or a Dagster+ deployment">Remote</button>
-  </div>
-  <div id="session-header">
-    <span id="session-title">New session</span>
   </div>
   <div id="plus-usage">
     <div id="plus-usage-cta">
@@ -229,18 +274,13 @@ export function renderFullChatBodyHtml(actionButtonsHtml: string): string {
     </div>
   </div>
   <div id="quick-actions">${actionButtonsHtml}</div>
-  <div id="messages">
-    <div class="system-note">Ask Dagster Expert about this project's assets, groups, and kinds -- or use a button above.</div>
-  </div>
-  ${renderKeyBannerAndInputHtml()}`;
+  <button id="rail-new-btn"><i class="codicon codicon-add"></i>New Chat</button>
+  <div id="rail-list"></div>`;
 }
 
-/** Just the chat itself -- session title, message list, key banner,
- * input row. No quick actions, no Local/Remote target switch, no
- * Dagster+ usage bar -- those stay exclusive to the sidebar's "let this
- * panel do everything" view. Used by the editor-tab panel, whose own
- * session rail already replaces the sidebar's QuickPick-based history. */
-export function renderMinimalChatBodyHtml(): string {
+/** A single session's editor tab: just the title, the conversation, the
+ * key banner, and the input row. */
+export function renderTabBodyHtml(): string {
   return `
   <div id="session-header">
     <span id="session-title">New session</span>
@@ -248,11 +288,6 @@ export function renderMinimalChatBodyHtml(): string {
   <div id="messages">
     <div class="system-note">Ask Dagster Expert about this project's assets, groups, and kinds.</div>
   </div>
-  ${renderKeyBannerAndInputHtml()}`;
-}
-
-function renderKeyBannerAndInputHtml(): string {
-  return `
   <div id="key-banner">
     <div class="system-note">Set an Anthropic API key to start chatting.</div>
     <button id="set-key-btn">Set API Key</button>

@@ -12,12 +12,18 @@ interface SessionQuickPickItem extends vscode.QuickPickItem {
 
 /** Claude Code's own sessions list, scoped down to a QuickPick instead of
  * a dedicated tree view -- per-item archive/delete via QuickPick's
- * button API, switching via plain selection. A full tree view (grouping,
- * inline rename, etc.) is a reasonable follow-up if this isn't enough. */
-export function registerChatHistoryCommands(context: vscode.ExtensionContext, sessions: SessionManager): void {
+ * button API, switching via plain selection (which now means "open this
+ * session's own editor tab", same as clicking it in the sidebar's rail --
+ * there's no in-place conversation view left anywhere to switch within). */
+export function registerChatHistoryCommands(
+  context: vscode.ExtensionContext,
+  sessions: SessionManager,
+  openSessionTab: (sessionId: string) => void
+): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('dagsterPowerUser.newChatSession', async () => {
-      await sessions.newSession();
+      const session = await sessions.newSession();
+      openSessionTab(session.id);
     })
   );
 
@@ -58,7 +64,7 @@ export function registerChatHistoryCommands(context: vscode.ExtensionContext, se
 
       qp.onDidAccept(() => {
         const picked = qp.selectedItems[0];
-        if (picked) void sessions.switchTo(picked.sessionId);
+        if (picked) openSessionTab(picked.sessionId);
         qp.hide();
       });
 

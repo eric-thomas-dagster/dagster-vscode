@@ -91,6 +91,15 @@ export class SessionManager implements vscode.Disposable {
     return this.sessions.find((s) => s.id === this.activeId)!;
   }
 
+  /** A specific session by id, regardless of which one is "active" --
+   * each open breakout tab is permanently bound to ONE session (per the
+   * "multiple chats open as separate tabs, like Claude Code's own
+   * sidebar + tabs" ask), so a tab needs to read/write ITS OWN session
+   * without disturbing whatever anything else considers "active". */
+  getSession(id: string): ChatSession | undefined {
+    return this.sessions.find((s) => s.id === id);
+  }
+
   listSessions(): ChatSession[] {
     return this.sessions;
   }
@@ -109,7 +118,16 @@ export class SessionManager implements vscode.Disposable {
   }
 
   async appendMessage(message: ChatMessage): Promise<void> {
-    const session = this.getActiveSession();
+    await this.appendMessageTo(this.activeId, message);
+  }
+
+  /** Same as appendMessage, but for a SPECIFIC session -- what an open
+   * breakout tab actually calls, since it's bound to one session id and
+   * may not be the "active" one (e.g. the user has two tabs open and is
+   * typing in the one that isn't currently focused). */
+  async appendMessageTo(id: string, message: ChatMessage): Promise<void> {
+    const session = this.getSession(id);
+    if (!session) return;
     session.messages.push(message);
     session.updatedAt = Date.now();
     if (session.title === 'New session' && message.role === 'user') {

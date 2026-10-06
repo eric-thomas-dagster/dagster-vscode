@@ -1,13 +1,8 @@
 import * as vscode from 'vscode';
-import { askDagsterExpert } from '../ai/dagsterExpert';
-import { hasApiKey, setApiKey } from '../ai/llmClient';
-import type { AssetIndexStore } from '../data/assetIndex';
-import type { PrimitiveIndexStore } from '../data/primitiveIndex';
-import type { SessionManager } from './sessionManager';
 import { getDagsterPlusUsageSummary, type DagsterPlusUsageSummary } from '../data/dagsterPlusClient';
 import { type ActiveTargetStore, describeTarget, pickTarget } from '../data/activeTarget';
-import { CHAT_SHARED_CSS, renderFullChatBodyHtml } from './chatStyles';
-import { sessionListMessage } from './sessionManager';
+import { CHAT_SHARED_CSS, renderSidebarBodyHtml } from './chatStyles';
+import { type SessionManager, sessionListMessage } from './sessionManager';
 
 function getNonce(): string {
   const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -16,7 +11,7 @@ function getNonce(): string {
   return text;
 }
 
-/** Pinned quick-action pills shown above the chat input -- kept to just
+/** Pinned quick-action pills shown above the session list -- kept to just
  * the handful of commands used constantly (per the "let this panel do
  * EVERYTHING" ask). Everything else lives behind the "More Actions" pill
  * (src/commands/moreActions.ts) as a categorized QuickPick instead of a
@@ -31,17 +26,15 @@ export const QUICK_ACTIONS: Array<{ command: string; label: string; icon: string
 export const MORE_ACTIONS_COMMAND = 'dagsterPowerUser.showMoreActions';
 
 /**
- * The sidebar chat view -- docked under the same Activity Bar icon as
- * Dagster Definitions, same idea as Claude Code's own panel. Plain
- * inline HTML/CSS styled off VS Code's own `--vscode-*` theme variables
- * (a simple message list + input box doesn't need a component
- * framework); client-side JS lives in media/chatView.js as a real file
- * referenced via `asWebviewUri`, NOT inlined into this TS template
- * literal -- an earlier version hand-escaped regex literals inside the
- * inline script and got the double-escaping wrong (verified live: every
- * character came out individually wrapped in `<em>` tags), which a
- * real, directly-executable .js file can't do since there's no second
- * layer of string-escaping to get wrong.
+ * The sidebar view -- docked under the same Activity Bar icon as Dagster
+ * Definitions, same idea as Claude Code's own session-manager sidebar.
+ * NOT a chat UI: no messages, no input box. It's a picker -- quick
+ * actions, the Local/Remote target switch, Dagster+ usage, and the full
+ * session list. Picking a session (or "New Chat") opens/focuses that
+ * session's own editor tab (chatPanel.ts), where the actual conversation
+ * lives -- exactly Claude Code's own "session list sidebar + separate
+ * chat tabs" split, per explicit feedback that a single merged view
+ * wasn't what was wanted.
  */
 export class DagsterExpertChatViewProvider implements vscode.WebviewViewProvider {
   static readonly viewType = 'dagsterPowerUser.chat';
@@ -50,38 +43,30 @@ export class DagsterExpertChatViewProvider implements vscode.WebviewViewProvider
 
   constructor(
     private readonly context: vscode.ExtensionContext,
-    private readonly store: AssetIndexStore,
-    private readonly primitives: PrimitiveIndexStore,
     private readonly sessions: SessionManager,
     private readonly activeTarget: ActiveTargetStore,
-    private readonly hasLocalProject: () => boolean
+    private readonly hasLocalProject: () => boolean,
+    private readonly openSessionTab: (sessionId: string) => void
   ) {
     // Sessions/target can both change from OUTSIDE this webview's own
     // messages (e.g. "New Chat"/"Chat History" run as real vscode
-    // commands via the generic runCommand handler below, same as every
-    // other quick action) -- resync whenever either does, not just
-    // right after this view's own `ask`.
+    // commands, or a session being appended to from an "ask Dagster
+    // Expert about this error" flow elsewhere) -- resync whenever either
+    // does, not just right after this view's own messages.
     this.sessions.onDidChange(() => this.syncState());
     this.activeTarget.onDidChange(() => this.syncState());
   }
 
   private syncState(): void {
     if (!this.view) return;
-    const session = this.sessions.getActiveSession();
-    void this.view.webview.postMessage({
-      type: 'loadHistory',
-      title: session.title,
-      messages: session.messages,
-    });
     void this.view.webview.postMessage({
       type: 'target',
       isLocal: this.activeTarget.get().kind === 'local',
       label: describeTarget(this.activeTarget.get()),
     });
-    // Harmless no-op in this narrow sidebar view (no rail in its HTML to
-    // render it into) -- posted anyway so the SAME client script works
-    // unchanged in the editor-tab panel, which does have one.
-    void this.view.webview.postMessage(sessionListMessage(this.sessions.listSessions(), session.id));
+    void this.view.webview.postMessage(
+      sessionListMessage(this.sessions.listSessions(), this.sessions.getActiveSession().id)
+    );
     // Re-post whatever Dagster+ summary is already cached (no network
     // call here) so switching back to this view doesn't flash blank
     // while refreshPlusUsage()'s own fetch is still in flight.
@@ -110,7 +95,6 @@ export class DagsterExpertChatViewProvider implements vscode.WebviewViewProvider
     webviewView.webview.onDidReceiveMessage(
       async (message: {
         type: string;
-        question?: string;
         command?: string;
         to?: 'local' | 'remote';
         id?: string;
@@ -125,16 +109,13 @@ export class DagsterExpertChatViewProvider implements vscode.WebviewViewProvider
           }
           return;
         }
-        // Posted by the session rail -- only rendered in the editor-tab
-        // panel's HTML today, but handled here too (harmless if nothing
-        // ever sends them from this narrower sidebar view) so this view
-        // doesn't quietly fall behind if a rail is ever added here too.
         if (message.type === 'switchSession' && message.id) {
-          await this.sessions.switchTo(message.id);
+          this.openSessionTab(message.id);
           return;
         }
         if (message.type === 'newSessionInline') {
-          await this.sessions.newSession();
+          const session = await this.sessions.newSession();
+          this.openSessionTab(session.id);
           return;
         }
         if (message.type === 'archiveSessionInline' && message.id) {
@@ -152,48 +133,18 @@ export class DagsterExpertChatViewProvider implements vscode.WebviewViewProvider
           return;
         }
         if (message.type === 'ready') {
-          const ok = await hasApiKey(this.context);
-          void webviewView.webview.postMessage({ type: ok ? 'ready' : 'needsKey' });
           this.syncState();
           void this.refreshPlusUsage();
           return;
         }
-        if (message.type === 'setKey') {
-          await setApiKey(this.context, 'anthropic');
-          const ok = await hasApiKey(this.context);
-          void webviewView.webview.postMessage({ type: ok ? 'ready' : 'needsKey' });
-          return;
-        }
         if (message.type === 'runCommand' && message.command) {
           await vscode.commands.executeCommand(message.command);
-          // "More Actions" just opens a picker -- nothing actually ran
-          // yet, so there's nothing worth echoing into the transcript.
-          if (message.command !== MORE_ACTIONS_COMMAND) {
-            const action = QUICK_ACTIONS.find((a) => a.command === message.command);
-            void webviewView.webview.postMessage({ type: 'commandRan', label: action?.label ?? message.command });
-          } else {
+          if (message.command === MORE_ACTIONS_COMMAND) {
             // The only place a Dagster+ credential change can come from
             // right now (it's a More Actions entry, not a pinned pill).
             void this.refreshPlusUsage();
           }
           this.syncState();
-          return;
-        }
-        if (message.type === 'ask' && message.question) {
-          const question = message.question;
-          try {
-            const history = this.sessions.getActiveSession().messages;
-            const answer = await askDagsterExpert(this.context, this.store, this.primitives, question, history);
-            await this.sessions.appendMessage({ role: 'user', content: question });
-            await this.sessions.appendMessage({ role: 'assistant', content: answer });
-            void webviewView.webview.postMessage({ type: 'answer', text: answer });
-            this.syncState();
-          } catch (e) {
-            void webviewView.webview.postMessage({
-              type: 'error',
-              text: e instanceof Error ? e.message : String(e),
-            });
-          }
         }
       }
     );
@@ -201,7 +152,7 @@ export class DagsterExpertChatViewProvider implements vscode.WebviewViewProvider
 
   private renderHtml(webview: vscode.Webview, mediaRoot: vscode.Uri): string {
     const nonce = getNonce();
-    const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(mediaRoot, 'chatView.js'));
+    const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(mediaRoot, 'chatSidebar.js'));
     const codiconCssUri = webview.asWebviewUri(vscode.Uri.joinPath(mediaRoot, 'codicons', 'codicon.css'));
     const csp = `default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src ${webview.cspSource} 'nonce-${nonce}'; font-src ${webview.cspSource};`;
     const actionButtons = QUICK_ACTIONS.map(
@@ -231,7 +182,7 @@ export class DagsterExpertChatViewProvider implements vscode.WebviewViewProvider
 ${CHAT_SHARED_CSS}
   </style>
 </head>
-<body>${renderFullChatBodyHtml(actionButtons)}
+<body>${renderSidebarBodyHtml(actionButtons)}
   <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;

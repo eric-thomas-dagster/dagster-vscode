@@ -22,7 +22,7 @@ import { registerAssetRefDiagnostics } from './diagnostics/assetRefDiagnostics';
 import { registerDgCheckDiagnostics, DgCheckDiagnostics } from './diagnostics/dgCheckDiagnostics';
 import { registerProjectComponentsView } from './views/projectComponentsProvider';
 import { DagsterExpertChatViewProvider } from './chat/chatViewProvider';
-import { showDagsterExpertChatPanel } from './chat/chatPanel';
+import { showDagsterExpertChatTab } from './chat/chatPanel';
 import { setApiKey } from './ai/llmClient';
 import { scaffoldNewProject } from './commands/scaffoldProject';
 import { registerComponentCatalogView } from './views/componentCatalogProvider';
@@ -168,7 +168,9 @@ export async function activate(context: vscode.ExtensionContext) {
 
   const sessionManager = new SessionManager(context);
   context.subscriptions.push(sessionManager);
-  registerChatHistoryCommands(context, sessionManager);
+  registerChatHistoryCommands(context, sessionManager, (sessionId) =>
+    showDagsterExpertChatTab(context, assetIndexStore, primitiveIndexStore, sessionManager, sessionId)
+  );
   registerMoreActionsCommand(context);
   context.subscriptions.push(
     vscode.commands.registerCommand('dagsterPowerUser.setDagsterPlusCredentials', () => setDagsterPlusCredentials(context)),
@@ -285,15 +287,17 @@ export async function activate(context: vscode.ExtensionContext) {
 
   /** Shared by anything that wants to hand a real error/failure straight
    * to Dagster Expert as a conversation (not a file-localized Quick Fix)
-   * -- focuses the chat view, asks, and appends both sides to the active
-   * session so it shows up there like any other exchange. */
+   * -- opens/focuses the active session's own tab (the sidebar has no
+   * conversation UI to focus anymore), asks, and appends both sides to
+   * that session so it shows up there like any other exchange. */
   async function askDagsterExpertAbout(question: string): Promise<void> {
-    await vscode.commands.executeCommand('dagsterPowerUser.chat.focus');
+    const sessionId = sessionManager.getActiveSession().id;
+    showDagsterExpertChatTab(context, assetIndexStore, primitiveIndexStore, sessionManager, sessionId);
     try {
-      const history = sessionManager.getActiveSession().messages;
+      const history = sessionManager.getSession(sessionId)?.messages ?? [];
       const answer = await askDagsterExpert(context, assetIndexStore, primitiveIndexStore, question, history);
-      await sessionManager.appendMessage({ role: 'user', content: question });
-      await sessionManager.appendMessage({ role: 'assistant', content: answer });
+      await sessionManager.appendMessageTo(sessionId, { role: 'user', content: question });
+      await sessionManager.appendMessageTo(sessionId, { role: 'assistant', content: answer });
     } catch (e) {
       vscode.window.showErrorMessage(`Dagster Expert: ${e instanceof Error ? e.message : String(e)}`);
     }
@@ -387,11 +391,10 @@ export async function activate(context: vscode.ExtensionContext) {
 
   const chatProvider = new DagsterExpertChatViewProvider(
     context,
-    assetIndexStore,
-    primitiveIndexStore,
     sessionManager,
     activeTargetStore,
-    () => !!getPrimaryProject()
+    () => !!getPrimaryProject(),
+    (sessionId) => showDagsterExpertChatTab(context, assetIndexStore, primitiveIndexStore, sessionManager, sessionId)
   );
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(DagsterExpertChatViewProvider.viewType, chatProvider)
@@ -400,11 +403,16 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('dagsterPowerUser.setAnthropicApiKey', () => setApiKey(context, 'anthropic')),
     vscode.commands.registerCommand('dagsterPowerUser.setOpenAiApiKey', () => setApiKey(context, 'openai')),
     // The sidebar view's own "pop out" button (view/title nav icon) --
-    // same session data, same chat, just with a visible session-list rail
-    // instead of the sidebar's single-conversation view + QuickPick
-    // history, for when the cramped sidebar isn't enough room.
+    // opens the active session's own tab, since the sidebar itself no
+    // longer has any conversation UI to show.
     vscode.commands.registerCommand('dagsterPowerUser.openChatPanel', () => {
-      showDagsterExpertChatPanel(context, assetIndexStore, primitiveIndexStore, sessionManager);
+      showDagsterExpertChatTab(
+        context,
+        assetIndexStore,
+        primitiveIndexStore,
+        sessionManager,
+        sessionManager.getActiveSession().id
+      );
     })
   );
   context.subscriptions.push(
