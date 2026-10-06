@@ -323,6 +323,26 @@ export function registerProjectComponentsView(
       });
       if (!description) return;
 
+      // A data-quality-check component (if this project has one configured
+      // anywhere) can check ANY asset regardless of how that asset itself
+      // is defined -- confirmed live against the real
+      // dagster_component_templates.EnhancedDataQualityChecks component's
+      // schema.json/example.yaml (fetched from the same GitHub repo the
+      // Component Catalog already indexes). Prefer it over scaffolding a
+      // raw @asset_check Python function whenever it's actually present.
+      const eqcFile = await findExistingComponentFile(
+        'dagster_component_templates.EnhancedDataQualityChecks'
+      );
+      if (eqcFile) {
+        const instruction = new vscode.Diagnostic(
+          new vscode.Range(0, 0, 0, 0),
+          `Add a new data-quality check for asset "${assetKey}" to this Enhanced Data Quality Checks component config (type: dagster_component_templates.EnhancedDataQualityChecks). The check should verify: ${description}. Add it under attributes.assets["${assetKey}"] (create that key if it doesn't exist yet), picking whichever check type best fits the description -- available types in this component include row_count_check, null_check, data_type_check, range_check, static_threshold, anomaly_detection, percent_delta, uniqueness_check, custom_sql_check, pattern_matching, value_set_validation, entropy_analysis, correlation_check, each taking a list of named check configs. Follow the exact shape of whichever type you pick from the other entries already in this file. Don't remove or duplicate any existing checks or assets in this file.`,
+          vscode.DiagnosticSeverity.Hint
+        );
+        await vscode.commands.executeCommand('dagsterPowerUser.fixDiagnosticWithAi', eqcFile, instruction, true);
+        return;
+      }
+
       const location = await resolver.resolve(assetKey);
       if (!location) {
         vscode.window.showWarningMessage(`Dagster: couldn't find "${assetKey}" in your local source to edit.`);
@@ -352,6 +372,26 @@ export function registerProjectComponentsView(
       await promptAndScaffoldSchedule(resolver, assetKey, `target=["${assetKey}"]`, true);
     })
   );
+
+  /** Cheap, bounded scan for a `defs.yaml` already configuring a given
+   * component type anywhere in the workspace -- same technique
+   * AssetDefinitionResolver already uses for its own YAML fallback. */
+  async function findExistingComponentFile(componentType: string): Promise<vscode.Uri | undefined> {
+    const yamlFiles = await vscode.workspace.findFiles(
+      '**/defs.yaml',
+      '**/{node_modules,.venv,venv,__pycache__,.git,dbt_packages,target}/**',
+      500
+    );
+    for (const file of yamlFiles) {
+      try {
+        const text = Buffer.from(await vscode.workspace.fs.readFile(file)).toString('utf8');
+        if (text.includes(componentType)) return file;
+      } catch {
+        continue;
+      }
+    }
+    return undefined;
+  }
 
   async function promptAndScaffoldSchedule(
     resolver: AssetDefinitionResolver,
