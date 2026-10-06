@@ -108,6 +108,53 @@ export class AssetDefinitionResolver implements vscode.Disposable {
       }
     }
 
+    // FURTHER last resort: a component that synthesizes names from a
+    // prefix attribute (e.g. a real AgenticPipelineComponent instance's
+    // own `asset_name_prefix: "research_bot"`, producing an asset
+    // "research_bot_debated" or a job "research_bot_pipeline" -- neither
+    // spelled out literally anywhere) can't be matched by any exact-value
+    // check above. Confirmed live: this exact gap left both a job name
+    // and an auto-generated check name ("asset_check_<hash>") completely
+    // unresolvable. Scans for any `key: "value"` line whose value is a
+    // non-trivial (>=4 char) PREFIX of the identifier, and jumps to that
+    // defs.yaml instance -- not pinpoint-exact, but it's the real config
+    // that produced the thing, the closest meaningful "definition" there
+    // is for something with no literal name anywhere in source. (A
+    // synthetic check id with no relation to any prefix, like
+    // "asset_check_121d6656", still won't match here -- but its own
+    // go-to-definition already falls back to its ASSOCIATED ASSET's key,
+    // which this fallback resolves instead.)
+    if (!found) {
+      const prefixValueRe = /^[ \t]*[A-Za-z0-9_]+:\s*["']?([A-Za-z_][A-Za-z0-9_]{3,})["']?\s*$/gm;
+      const yamlFiles2 = await vscode.workspace.findFiles(
+        '**/defs.yaml',
+        '**/{node_modules,.venv,venv,__pycache__,.git,dbt_packages,target}/**',
+        500
+      );
+      for (const file of yamlFiles2) {
+        let text: string;
+        try {
+          text = Buffer.from(await vscode.workspace.fs.readFile(file)).toString('utf8');
+        } catch {
+          continue;
+        }
+        prefixValueRe.lastIndex = 0;
+        let m: RegExpExecArray | null;
+        let hit: RegExpExecArray | null = null;
+        while ((m = prefixValueRe.exec(text))) {
+          if (identifier.startsWith(m[1])) {
+            hit = m;
+            break;
+          }
+        }
+        if (hit) {
+          const doc = await vscode.workspace.openTextDocument(file);
+          found = new vscode.Location(file, doc.positionAt(hit.index));
+          break;
+        }
+      }
+    }
+
     this.cache.set(assetKey, found);
     return found;
   }
