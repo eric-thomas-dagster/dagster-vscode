@@ -479,6 +479,79 @@ export function buildCheckFormSpec(checkType: DQCheckTypeSpec): FormSpec {
   };
 }
 
+function fieldValueAsObject(field: DQField, value: unknown): unknown {
+  if (value === undefined || value === null || value === '') return undefined;
+
+  switch (field.yamlKind) {
+    case 'string-list': {
+      const items = splitList(String(value));
+      return items.length > 0 ? items : undefined;
+    }
+    case 'col-type-pairs': {
+      const pairs = String(value)
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean)
+        .map((l) => {
+          const idx = l.indexOf(':');
+          return idx === -1 ? null : { column: l.slice(0, idx).trim(), expected_type: l.slice(idx + 1).trim() };
+        })
+        .filter((p): p is { column: string; expected_type: string } => p !== null);
+      return pairs.length > 0 ? pairs : undefined;
+    }
+    case 'col-range-triples': {
+      const triples = String(value)
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean)
+        .map((l) => {
+          const idx = l.indexOf(':');
+          if (idx === -1) return null;
+          const column = l.slice(0, idx).trim();
+          const [min, max] = l
+            .slice(idx + 1)
+            .split(',')
+            .map((s) => s.trim());
+          const entry: Record<string, unknown> = { column };
+          if (min) entry.min_value = Number(min);
+          if (max) entry.max_value = Number(max);
+          return entry;
+        })
+        .filter((p): p is Record<string, unknown> => p !== null);
+      return triples.length > 0 ? triples : undefined;
+    }
+    case 'uniqueness-group': {
+      const cols = splitList(String(value));
+      return cols.length > 0 ? [{ columns: cols }] : undefined;
+    }
+    case 'bool':
+      return Boolean(value);
+    case 'number': {
+      const n = Number(value);
+      return Number.isFinite(n) ? n : undefined;
+    }
+    default:
+      return String(value);
+  }
+}
+
+/** Same check-entry shape as buildCheckEntryYaml, but as a plain JS object
+ * rather than a YAML-text fragment -- for merging into an existing file's
+ * ALREADY-PARSED structure (see mergeCheckIntoAttributes below), rather
+ * than asking the model to splice text into a whole-file rewrite, which is
+ * exactly the kind of edit that silently truncated a check's name in a
+ * real, live case this was built to fix. */
+export function buildCheckEntryObject(checkType: DQCheckTypeSpec, values: Record<string, unknown>): Record<string, unknown> {
+  const allFields = [...COMMON_FIELDS, ...checkType.fields, ...COMMON_TRAILING_FIELDS];
+  const entry: Record<string, unknown> = { name: String(values.name ?? '').trim() };
+  for (const field of allFields) {
+    if (field.name === 'name') continue;
+    const v = fieldValueAsObject(field, values[field.name]);
+    if (v !== undefined) entry[field.yamlKey] = v;
+  }
+  return entry;
+}
+
 function yamlScalar(v: unknown): string {
   if (typeof v === 'number') return String(v);
   if (typeof v === 'boolean') return String(v);

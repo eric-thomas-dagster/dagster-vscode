@@ -260,7 +260,10 @@
         "name": "dagster_list_assets",
         "displayName": "List Dagster Assets",
         "modelDescription": "Lists every asset in the currently active Dagster target (Local, a remote Dagster OSS deployment, or Dagster+), including its key, group, kinds, description, and upstream dependencies.",
-        "inputSchema": { "type": "object", "properties": {} }
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
       },
       {
         "name": "dagster_list_runs",
@@ -269,8 +272,14 @@
         "inputSchema": {
           "type": "object",
           "properties": {
-            "limit": { "type": "number", "description": "Max runs to return, default 20" },
-            "jobName": { "type": "string", "description": "Only return runs of this job" }
+            "limit": {
+              "type": "number",
+              "description": "Max runs to return, default 20"
+            },
+            "jobName": {
+              "type": "string",
+              "description": "Only return runs of this job"
+            }
           }
         }
       },
@@ -280,15 +289,25 @@
         "modelDescription": "Fetches structured event logs for a specific Dagster run by its run ID, including failure messages/tracebacks.",
         "inputSchema": {
           "type": "object",
-          "properties": { "runId": { "type": "string", "description": "The run ID to fetch logs for" } },
-          "required": ["runId"]
+          "properties": {
+            "runId": {
+              "type": "string",
+              "description": "The run ID to fetch logs for"
+            }
+          },
+          "required": [
+            "runId"
+          ]
         }
       },
       {
         "name": "dagster_list_schedules_and_sensors",
         "displayName": "List Dagster Schedules & Sensors",
         "modelDescription": "Lists every schedule and sensor in the currently active Dagster target, with its current running/stopped status.",
-        "inputSchema": { "type": "object", "properties": {} }
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
       },
       {
         "name": "dagster_materialize_asset",
@@ -296,8 +315,15 @@
         "modelDescription": "Launches a real Dagster run to materialize a specific asset by its key, against the currently active target. This has real side effects.",
         "inputSchema": {
           "type": "object",
-          "properties": { "assetKey": { "type": "string", "description": "The asset key, e.g. \"models/stg_customers\"" } },
-          "required": ["assetKey"]
+          "properties": {
+            "assetKey": {
+              "type": "string",
+              "description": "The asset key, e.g. \"models/stg_customers\""
+            }
+          },
+          "required": [
+            "assetKey"
+          ]
         }
       },
       {
@@ -306,8 +332,15 @@
         "modelDescription": "Launches a real Dagster run for a named job, against the currently active target. This has real side effects.",
         "inputSchema": {
           "type": "object",
-          "properties": { "jobName": { "type": "string", "description": "The job's name" } },
-          "required": ["jobName"]
+          "properties": {
+            "jobName": {
+              "type": "string",
+              "description": "The job's name"
+            }
+          },
+          "required": [
+            "jobName"
+          ]
         }
       },
       {
@@ -316,8 +349,15 @@
         "modelDescription": "Terminates a currently running Dagster run by its run ID. This has real side effects and cannot be undone.",
         "inputSchema": {
           "type": "object",
-          "properties": { "runId": { "type": "string", "description": "The run ID to terminate" } },
-          "required": ["runId"]
+          "properties": {
+            "runId": {
+              "type": "string",
+              "description": "The run ID to terminate"
+            }
+          },
+          "required": [
+            "runId"
+          ]
         }
       },
       {
@@ -326,8 +366,15 @@
         "modelDescription": "Re-executes a finished Dagster run (e.g. one that failed) as a new run, by its run ID. This has real side effects.",
         "inputSchema": {
           "type": "object",
-          "properties": { "runId": { "type": "string", "description": "The run ID to retry/re-execute" } },
-          "required": ["runId"]
+          "properties": {
+            "runId": {
+              "type": "string",
+              "description": "The run ID to retry/re-execute"
+            }
+          },
+          "required": [
+            "runId"
+          ]
         }
       },
       {
@@ -337,11 +384,30 @@
         "inputSchema": {
           "type": "object",
           "properties": {
-            "name": { "type": "string", "description": "The schedule or sensor's name" },
-            "kind": { "type": "string", "enum": ["schedule", "sensor"] },
-            "action": { "type": "string", "enum": ["start", "stop"] }
+            "name": {
+              "type": "string",
+              "description": "The schedule or sensor's name"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "schedule",
+                "sensor"
+              ]
+            },
+            "action": {
+              "type": "string",
+              "enum": [
+                "start",
+                "stop"
+              ]
+            }
           },
-          "required": ["name", "kind", "action"]
+          "required": [
+            "name",
+            "kind",
+            "action"
+          ]
         }
       }
     ],
@@ -469,6 +535,7 @@
     "esbuild@0.24.2": true
   },
   "dependencies": {
-    "@vscode/codicons": "^0.0.46-24"
+    "@vscode/codicons": "^0.0.46-24",
+    "yaml": "^2.9.1"
   }
 }

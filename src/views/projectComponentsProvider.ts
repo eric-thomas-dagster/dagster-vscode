@@ -7,7 +7,8 @@ import type { DagsterProject } from '../projectDetection';
 import { fetchComponentCatalog } from '../data/componentCatalog';
 import { installComponent, extractClassName, writeComponentInstance } from '../commands/installComponent';
 import { showComponentForm, type FormSpec } from '../webviews/componentFormPanel';
-import { DQ_CHECK_TYPES, buildCheckFormSpec, buildCheckEntryYaml, buildFreshAttributesYaml } from '../data/dataQualityChecks';
+import { DQ_CHECK_TYPES, buildCheckFormSpec, buildCheckEntryObject, buildFreshAttributesYaml } from '../data/dataQualityChecks';
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 
 /**
  * Sidebar tree of everything the current dev server knows about --
@@ -543,13 +544,44 @@ export function registerProjectComponentsView(
     return writeComponentInstance(component, project, instanceName, attributesYaml);
   }
 
+  /** Parses an existing EnhancedDataQualityChecks defs.yaml, pushes one
+   * new check entry under attributes.assets[assetKey][checkTypeId]
+   * (creating either/both if they don't exist yet), and re-serializes --
+   * fully deterministic, no AI involved. This replaced an AI whole-file
+   * splice that was confirmed live to corrupt entries (a check's `name`
+   * silently truncated mid-string) and to drop a second check entirely --
+   * exactly the reliability problem the structured form was built to
+   * solve in the first place, which the splice step had reintroduced.
+   * Trade-off: real comments or unusual formatting in the existing file
+   * won't survive a round-trip -- acceptable here since every file this
+   * touches was itself machine-written by this same component flow. */
+  async function mergeCheckIntoEqcFile(
+    fileUri: vscode.Uri,
+    assetKey: string,
+    checkTypeId: string,
+    entry: Record<string, unknown>
+  ): Promise<void> {
+    const text = Buffer.from(await vscode.workspace.fs.readFile(fileUri)).toString('utf8');
+    const parsed = (parseYaml(text) ?? {}) as Record<string, unknown>;
+    if (typeof parsed.attributes !== 'object' || parsed.attributes === null) parsed.attributes = {};
+    const attributes = parsed.attributes as Record<string, unknown>;
+    if (typeof attributes.assets !== 'object' || attributes.assets === null) attributes.assets = {};
+    const assetsMap = attributes.assets as Record<string, unknown>;
+    if (typeof assetsMap[assetKey] !== 'object' || assetsMap[assetKey] === null) assetsMap[assetKey] = {};
+    const assetEntry = assetsMap[assetKey] as Record<string, unknown>;
+    if (!Array.isArray(assetEntry[checkTypeId])) assetEntry[checkTypeId] = [];
+    (assetEntry[checkTypeId] as unknown[]).push(entry);
+
+    await vscode.workspace.fs.writeFile(fileUri, Buffer.from(stringifyYaml(parsed), 'utf8'));
+  }
+
   /** The form-driven twin of the plain-language addAssetCheck path: the
    * check's exact fields are already known (no AI guess needed for the
-   * structure), so an existing component file just needs the entry
-   * SPLICED in at the right nested key (still AI-mediated, since the
-   * surrounding file structure is arbitrary) and a brand-new instance can
-   * be written out fully deterministically, same trust level as "New
-   * Project"/"Install Component" already use for brand-new files. */
+   * structure, and no AI needed for the merge either -- see
+   * mergeCheckIntoEqcFile above), so BOTH an existing component file and a
+   * brand-new instance are now written out fully deterministically, same
+   * trust level as "New Project"/"Install Component" already use for
+   * brand-new files. */
   async function addStructuredDataQualityCheck(
     assetKey: string,
     checkType: (typeof DQ_CHECK_TYPES)[number]
@@ -568,13 +600,20 @@ export function registerProjectComponentsView(
 
     const eqcFile = await findExistingComponentFile('EnhancedDataQualityChecks');
     if (eqcFile) {
-      const entryYaml = buildCheckEntryYaml(checkType, values);
-      const instruction = new vscode.Diagnostic(
-        new vscode.Range(0, 0, 0, 0),
-        `Add this exact data-quality check entry to this Enhanced Data Quality Checks component config, under attributes.assets["${assetKey}"].${checkType.id} (create either or both of that asset key and check-type list if they don't exist yet; if attributes.assets["${assetKey}"].${checkType.id} already exists as a list, APPEND this entry to it rather than replacing the list). Use these exact field values verbatim -- do not change, add, or remove any fields from this entry:\n${entryYaml}\nDon't remove or duplicate any other existing checks or assets in this file.`,
-        vscode.DiagnosticSeverity.Hint
+      const entry = buildCheckEntryObject(checkType, values);
+      try {
+        await mergeCheckIntoEqcFile(eqcFile, assetKey, checkType.id, entry);
+      } catch (e) {
+        vscode.window.showErrorMessage(
+          `Dagster: couldn't update ${vscode.workspace.asRelativePath(eqcFile)}: ${e instanceof Error ? e.message : e}`
+        );
+        return;
+      }
+      const doc = await vscode.workspace.openTextDocument(eqcFile);
+      await vscode.window.showTextDocument(doc);
+      vscode.window.showInformationMessage(
+        `Dagster: added "${checkType.label}" check for "${assetKey}" -- run "Dagster: Run dg check defs" to validate.`
       );
-      await vscode.commands.executeCommand('dagsterPowerUser.fixDiagnosticWithAi', eqcFile, instruction, true);
       return;
     }
 
