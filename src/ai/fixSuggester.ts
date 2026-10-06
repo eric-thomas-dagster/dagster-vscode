@@ -82,7 +82,15 @@ export async function suggestFix(
   const raw = await sendChatMessage(context, system, [{ role: 'user', content: prompt }]);
   const parsed = extractJson(raw);
   if (!parsed) {
-    throw new Error('Dagster Expert did not return a usable fix.');
+    // A generic "did not return a usable fix" with no context was a dead
+    // end to debug -- most real cases of this are the response getting
+    // cut off mid-JSON (large file + a low max_tokens cap), which looks
+    // identical to the model just refusing. Showing what it actually said
+    // makes that diagnosable instead of a guess.
+    const preview = raw.trim().slice(0, 300);
+    throw new Error(
+      `Dagster Expert did not return a usable fix.${preview ? ` Its response started with: ${preview}${raw.length > 300 ? '...' : ''}` : ' (empty response)'}`
+    );
   }
   return parsed;
 }

@@ -72,7 +72,14 @@ async function callAnthropic(apiKey: string, model: string, system: string, mess
         },
         body: JSON.stringify({
           model,
-          max_tokens: 1024,
+          // 1024 was too tight even for a normal chat answer, and
+          // actively broke whole-file edits (Add Check/Add Schedule
+          // ask the model to echo back the ENTIRE file with a new
+          // function spliced in -- anything past ~1024 tokens of
+          // output got cut off mid-JSON, which read as "Dagster Expert
+          // did not return a usable fix" with no indication it was
+          // really a truncation problem).
+          max_tokens: 8192,
           system,
           messages: messages.map((m) => ({ role: m.role, content: m.content })),
         }),
@@ -103,6 +110,7 @@ async function callOpenAi(apiKey: string, model: string, system: string, message
         },
         body: JSON.stringify({
           model,
+          max_tokens: 8192,
           messages: [{ role: 'system', content: system }, ...messages],
         }),
       });
