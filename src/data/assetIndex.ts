@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { fetchAssetGraph } from './graphqlClient';
+import { fetchAssetGraph, type AssetCheckSummary } from './graphqlClient';
 
 export interface AssetRefInfo {
   key: string;
@@ -7,6 +7,7 @@ export interface AssetRefInfo {
   group: string | null;
   kinds: string[];
   staleStatus: string | null;
+  checks: AssetCheckSummary[];
 }
 
 /**
@@ -43,6 +44,7 @@ export class AssetIndexStore implements vscode.Disposable {
           group: n.groupName,
           kinds: n.kinds,
           staleStatus: n.staleStatus,
+          checks: n.checks,
         };
         const variants = new Set<string>([n.assetKey, n.assetKey.replace(/\//g, '_')]);
         const lastSeg = n.assetKey.split('/').pop();

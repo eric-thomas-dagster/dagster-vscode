@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import type { AssetIndexStore, AssetRefInfo } from '../data/assetIndex';
 import type { PrimitiveIndexStore, PrimitiveRefInfo } from '../data/primitiveIndex';
 import type { AssetDefinitionResolver } from '../language/definitionProvider';
-import { deriveWebBaseUrl } from '../data/graphqlClient';
+import { deriveWebBaseUrl, type AssetCheckSummary } from '../data/graphqlClient';
 import type { DagsterProject } from '../projectDetection';
 import { fetchComponentCatalog } from '../data/componentCatalog';
 import { installComponent, extractClassName, writeComponentInstance } from '../commands/installComponent';
@@ -60,7 +60,10 @@ class CategoryTreeItem extends vscode.TreeItem {
 
 class AssetTreeItem extends vscode.TreeItem {
   constructor(public readonly info: AssetRefInfo) {
-    super(info.key, vscode.TreeItemCollapsibleState.None);
+    super(
+      info.key,
+      info.checks.length > 0 ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None
+    );
     const parts: string[] = [];
     if (info.group) parts.push(info.group);
     if (info.kinds.length) parts.push(info.kinds.join(', '));
@@ -69,6 +72,28 @@ class AssetTreeItem extends vscode.TreeItem {
     this.iconPath = new vscode.ThemeIcon('layers');
     this.contextValue = 'dagsterAsset';
     this.command = { command: 'dagsterPowerUser.openAssetFromTree', title: 'Open Definition', arguments: [info.key] };
+  }
+}
+
+/** A single asset check, nested under the asset it belongs to -- the
+ * GraphQL layer already fetches these per-asset (assetChecksOrError) but
+ * nothing surfaced them in the tree before now. Clicking one opens the
+ * PARENT asset's definition (not the check's own) -- a check's source
+ * location isn't resolved by AssetDefinitionResolver today, and e.g. an
+ * EnhancedDataQualityChecks check's `name:` in YAML is too generic a key
+ * to safely disambiguate from other `name:` fields elsewhere in the same
+ * file. */
+class AssetCheckTreeItem extends vscode.TreeItem {
+  constructor(
+    public readonly check: AssetCheckSummary,
+    assetKey: string
+  ) {
+    super(check.name, vscode.TreeItemCollapsibleState.None);
+    this.description = 'check';
+    this.tooltip = check.description ?? check.name;
+    this.iconPath = new vscode.ThemeIcon('checklist');
+    this.contextValue = 'dagsterAssetCheck';
+    this.command = { command: 'dagsterPowerUser.openAssetFromTree', title: 'Open Definition', arguments: [assetKey] };
   }
 }
 
@@ -104,7 +129,7 @@ class LoadErrorTreeItem extends vscode.TreeItem {
   }
 }
 
-type TreeNode = CategoryTreeItem | AssetTreeItem | PrimitiveTreeItem | LoadErrorTreeItem;
+type TreeNode = CategoryTreeItem | AssetTreeItem | PrimitiveTreeItem | AssetCheckTreeItem | LoadErrorTreeItem;
 
 export class ProjectComponentsProvider implements vscode.TreeDataProvider<TreeNode> {
   private readonly emitter = new vscode.EventEmitter<void>();
@@ -160,6 +185,9 @@ export class ProjectComponentsProvider implements vscode.TreeDataProvider<TreeNo
     if (element instanceof CategoryTreeItem) {
       if (element.kind === 'assets') return this.uniqueAssets().map((info) => new AssetTreeItem(info));
       return this.primitivesOfKind(PRIMITIVE_KIND_FOR_CATEGORY[element.kind]!).map((info) => new PrimitiveTreeItem(info));
+    }
+    if (element instanceof AssetTreeItem) {
+      return element.info.checks.map((check) => new AssetCheckTreeItem(check, element.info.key));
     }
     return [];
   }
