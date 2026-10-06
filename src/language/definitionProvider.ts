@@ -76,8 +76,16 @@ export class AssetDefinitionResolver implements vscode.Disposable {
       // AssetJobComponent's `job_name:`, CronScheduleComponent's
       // `schedule_name:`) rather than a plain Python def/assignment --
       // confirmed real field names via each component's own example.yaml.
+      // Bare `name:` is the same idea for a component-defined CHECK (e.g.
+      // EnhancedDataQualityChecks' own check entries, confirmed real via
+      // its README's worked examples -- every check type's config has a
+      // `name:` field). It's a late, generic fallback (only reached once
+      // every more specific match above has already failed), so matching
+      // it is low-risk: the check names users choose are no less
+      // distinctive than the asset/job/schedule names this already
+      // searches for.
       const assetNameRe = new RegExp(
-        `(?:asset_name|job_name|schedule_name):\\s*["']?${escapeRegExp(identifier)}["']?`
+        `(?:asset_name|job_name|schedule_name|name):\\s*["']?${escapeRegExp(identifier)}["']?`
       );
       const yamlFiles = await vscode.workspace.findFiles(
         '**/defs.yaml',

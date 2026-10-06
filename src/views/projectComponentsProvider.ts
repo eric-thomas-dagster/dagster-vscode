@@ -77,12 +77,11 @@ class AssetTreeItem extends vscode.TreeItem {
 
 /** A single asset check, nested under the asset it belongs to -- the
  * GraphQL layer already fetches these per-asset (assetChecksOrError) but
- * nothing surfaced them in the tree before now. Clicking one opens the
- * PARENT asset's definition (not the check's own) -- a check's source
- * location isn't resolved by AssetDefinitionResolver today, and e.g. an
- * EnhancedDataQualityChecks check's `name:` in YAML is too generic a key
- * to safely disambiguate from other `name:` fields elsewhere in the same
- * file. */
+ * nothing surfaced them in the tree before now. Clicking one tries to
+ * resolve the CHECK's own definition first (its function name/`name=`
+ * kwarg for a raw Python @asset_check, or its `name:` config key for a
+ * component-defined check like EnhancedDataQualityChecks), falling back to
+ * the parent asset's location only if that specific lookup fails. */
 class AssetCheckTreeItem extends vscode.TreeItem {
   constructor(
     public readonly check: AssetCheckSummary,
@@ -93,7 +92,11 @@ class AssetCheckTreeItem extends vscode.TreeItem {
     this.tooltip = check.description ?? check.name;
     this.iconPath = new vscode.ThemeIcon('checklist');
     this.contextValue = 'dagsterAssetCheck';
-    this.command = { command: 'dagsterPowerUser.openAssetFromTree', title: 'Open Definition', arguments: [assetKey] };
+    this.command = {
+      command: 'dagsterPowerUser.openAssetFromTree',
+      title: 'Open Definition',
+      arguments: [check.name, assetKey],
+    };
   }
 }
 
@@ -207,8 +210,14 @@ export function registerProjectComponentsView(
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('dagsterPowerUser.openAssetFromTree', async (key: string) => {
-      const location = await resolver.resolve(key);
+    // `fallbackKey` is used by asset-check tree items: try the check's own
+    // name first (now resolvable via definitionProvider's bare `name:` YAML
+    // fallback, plus the existing `def <name>(`/`name="..."` python paths),
+    // and only fall back to the parent asset's location if that specific
+    // lookup comes up empty, rather than dead-ending with "couldn't find".
+    vscode.commands.registerCommand('dagsterPowerUser.openAssetFromTree', async (key: string, fallbackKey?: string) => {
+      let location = await resolver.resolve(key);
+      if (!location && fallbackKey) location = await resolver.resolve(fallbackKey);
       if (!location) {
         vscode.window.showInformationMessage(`Dagster: couldn't find a source location for "${key}" in this workspace.`);
         return;
