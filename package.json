@@ -253,6 +253,11 @@
         "command": "dagsterPowerUser.openPrimitiveInDagster",
         "title": "Dagster: Open in Dagster",
         "category": "Dagster"
+      },
+      {
+        "command": "dagsterPowerUser.openAssetCheckInDagster",
+        "title": "Dagster: Open in Dagster",
+        "category": "Dagster"
       }
     ],
     "languageModelTools": [
@@ -468,6 +473,10 @@
         {
           "command": "dagsterPowerUser.openPrimitiveInDagster",
           "when": "view == dagsterPowerUser.projectComponents && (viewItem == dagsterjob || viewItem == dagsterschedule || viewItem == dagsterscheduleRunning || viewItem == dagsterscheduleStopped || viewItem == dagstersensor || viewItem == dagstersensorRunning || viewItem == dagstersensorStopped)"
+        },
+        {
+          "command": "dagsterPowerUser.openAssetCheckInDagster",
+          "when": "view == dagsterPowerUser.projectComponents && viewItem == dagsterAssetCheck"
         }
       ],
       "explorer/context": [

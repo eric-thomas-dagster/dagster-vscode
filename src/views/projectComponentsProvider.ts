@@ -86,7 +86,7 @@ class AssetTreeItem extends vscode.TreeItem {
 class AssetCheckTreeItem extends vscode.TreeItem {
   constructor(
     public readonly check: AssetCheckSummary,
-    assetKey: string
+    public readonly assetKey: string
   ) {
     super(check.name, vscode.TreeItemCollapsibleState.None);
     this.description = 'check';
@@ -235,6 +235,24 @@ export function registerProjectComponentsView(
         return;
       }
       const url = `${deriveWebBaseUrl(graphqlUrl)}/assets/${key}`;
+      await vscode.env.openExternal(vscode.Uri.parse(url));
+    }),
+    // A check's own real page is the PARENT asset's page with a query
+    // string, not a standalone route -- confirmed live by the user
+    // navigating a real browser (same verification approach as the job/
+    // schedule/sensor routes below, since curl can't confirm how the
+    // SPA's client-side router resolves a path): /assets/<path>?view=
+    // checks&checkDetail=<name> for the one check, /assets/<path>?view=
+    // checks for the asset's whole Checks tab.
+    vscode.commands.registerCommand('dagsterPowerUser.openAssetCheckInDagster', async (arg: unknown) => {
+      const item = arg as AssetCheckTreeItem | undefined;
+      if (!item?.assetKey || !item.check) return;
+      const graphqlUrl = await getActiveGraphqlUrl();
+      if (!graphqlUrl) {
+        vscode.window.showWarningMessage('Dagster: no target currently connected.');
+        return;
+      }
+      const url = `${deriveWebBaseUrl(graphqlUrl)}/assets/${item.assetKey}?view=checks&checkDetail=${encodeURIComponent(item.check.name)}`;
       await vscode.env.openExternal(vscode.Uri.parse(url));
     }),
     // Covers job/schedule/sensor -- each has its own real overview page in
