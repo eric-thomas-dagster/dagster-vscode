@@ -5,7 +5,8 @@ import type { AssetDefinitionResolver } from '../language/definitionProvider';
 import { deriveWebBaseUrl } from '../data/graphqlClient';
 import type { DagsterProject } from '../projectDetection';
 import { fetchComponentCatalog } from '../data/componentCatalog';
-import { installComponent, extractClassName } from '../commands/installComponent';
+import { installComponent, extractClassName, writeComponentInstance } from '../commands/installComponent';
+import { showComponentForm, type FormSpec } from '../webviews/componentFormPanel';
 
 /**
  * Sidebar tree of everything the current dev server knows about --
@@ -309,9 +310,12 @@ export function registerProjectComponentsView(
         vscode.window.showWarningMessage(`Dagster: couldn't find job "${jobName}" in your local source to edit.`);
         return;
       }
+      const isPython = location.uri.fsPath.toLowerCase().endsWith('.py');
       const instruction = new vscode.Diagnostic(
         location.range,
-        `Add asset "${assetKey}" to this job's selection (the define_asset_job(...) call defining job "${jobName}"). Extend the existing selection however it's currently expressed (a list of strings, a selection DSL string, or an AssetSelection expression) to include this asset, without removing any assets it already selects. If there's no selection argument yet, add one containing just this asset.`,
+        isPython
+          ? `Add asset "${assetKey}" to this job's selection (the define_asset_job(...) call defining job "${jobName}"). Extend the existing selection however it's currently expressed (a list of strings, a selection DSL string, or an AssetSelection expression) to include this asset, without removing any assets it already selects. If there's no selection argument yet, add one containing just this asset.`
+          : `This file configures job "${jobName}" via a Dagster component (e.g. AssetJobComponent). Add asset "${assetKey}" to its attributes.asset_keys list, without removing or duplicating any existing entries.`,
         vscode.DiagnosticSeverity.Hint
       );
       await vscode.commands.executeCommand('dagsterPowerUser.fixDiagnosticWithAi', location.uri, instruction);
@@ -459,12 +463,154 @@ export function registerProjectComponentsView(
     return findExistingComponentFile(className);
   }
 
+  /** Fetches one specific catalog component by id and writes a new
+   * instance with the GIVEN attributes (not the catalog's own example) --
+   * thin wrapper over writeComponentInstance for callers that already
+   * know exactly what they want, built from real user input via a form
+   * rather than an AI guess. */
+  async function scaffoldComponentInstance(
+    componentId: string,
+    project: DagsterProject,
+    instanceName: string,
+    attributesYaml: string
+  ): Promise<vscode.Uri | undefined> {
+    const catalog = await fetchComponentCatalog(context);
+    const component = catalog.find((c) => c.id === componentId);
+    if (!component) {
+      vscode.window.showErrorMessage(`Dagster: "${componentId}" isn't in the component catalog.`);
+      return undefined;
+    }
+    return writeComponentInstance(component, project, instanceName, attributesYaml);
+  }
+
+  function yamlTagsBlock(raw: string): string {
+    const lines = raw
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .map((l) => {
+        const idx = l.indexOf(':');
+        return idx === -1 ? null : `    ${l.slice(0, idx).trim()}: ${JSON.stringify(l.slice(idx + 1).trim())}`;
+      })
+      .filter((l): l is string => l !== null);
+    return lines.length > 0 ? `  tags:\n${lines.join('\n')}\n` : '';
+  }
+
+  async function scaffoldScheduleComponent(
+    project: DagsterProject,
+    kind: 'cron' | 'interval',
+    name: string,
+    isAsset: boolean
+  ): Promise<void> {
+    const seen = new Set<string>();
+    const assetKeys = [...assets.getIndex().values()].map((i) => i.key).filter((k) => !seen.has(k) && seen.add(k));
+    const preselect = isAsset && assetKeys.includes(name) ? [name] : [];
+
+    const spec: FormSpec =
+      kind === 'cron'
+        ? {
+            title: 'Add Cron Schedule',
+            fields: [
+              { name: 'schedule_name', label: 'Schedule Name', type: 'text', required: true, default: `${name}_schedule` },
+              {
+                name: 'cron_expression',
+                label: 'Cron Expression',
+                type: 'text',
+                required: true,
+                default: '0 0 * * *',
+                placeholder: '0 6 * * *',
+              },
+              { name: 'asset_keys', label: 'Assets', type: 'asset-multiselect', default: preselect },
+              { name: 'execution_timezone', label: 'Execution Timezone', type: 'text', placeholder: 'America/Los_Angeles' },
+              {
+                name: 'default_status',
+                label: 'Default Status',
+                type: 'select',
+                options: ['STOPPED', 'RUNNING'],
+                default: 'STOPPED',
+                description: 'Dagster starts a schedule stopped unless you set this to RUNNING.',
+              },
+              { name: 'tags', label: 'Tags', type: 'tags', placeholder: 'one per line, key: value' },
+            ],
+          }
+        : {
+            title: 'Add Interval Schedule',
+            fields: [
+              { name: 'schedule_name', label: 'Schedule Name', type: 'text', required: true, default: `${name}_schedule` },
+              { name: 'every', label: 'Every', type: 'text', required: true, default: '1h', placeholder: '30m, 2h, 1d' },
+              { name: 'asset_keys', label: 'Assets', type: 'asset-multiselect', default: preselect },
+              {
+                name: 'default_status',
+                label: 'Default Status',
+                type: 'select',
+                options: ['STOPPED', 'RUNNING'],
+                default: 'STOPPED',
+              },
+            ],
+          };
+
+    const values = await showComponentForm(spec, assetKeys);
+    if (!values) return;
+
+    const scheduleName = String(values.schedule_name ?? '').trim();
+    const keys = (values.asset_keys as string[] | undefined) ?? [];
+    if (!scheduleName || keys.length === 0 || (kind === 'cron' && !values.cron_expression) || (kind === 'interval' && !values.every)) {
+      vscode.window.showWarningMessage('Dagster: schedule not created -- a name, at least one asset, and the schedule timing are required.');
+      return;
+    }
+
+    let attrs = `attributes:\n  schedule_name: ${JSON.stringify(scheduleName)}\n`;
+    attrs +=
+      kind === 'cron'
+        ? `  cron_expression: ${JSON.stringify(values.cron_expression)}\n`
+        : `  every: ${JSON.stringify(values.every)}\n`;
+    attrs += `  asset_keys: [${keys.map((k) => JSON.stringify(k)).join(', ')}]\n`;
+    if (kind === 'cron' && values.execution_timezone) {
+      attrs += `  execution_timezone: ${JSON.stringify(values.execution_timezone)}\n`;
+    }
+    attrs += `  default_status: ${values.default_status}\n`;
+    if (kind === 'cron') attrs += yamlTagsBlock(String(values.tags ?? ''));
+
+    const instanceName = scheduleName.toLowerCase().replace(/[^a-z0-9_]/g, '_') || 'schedule';
+    const defsFileUri = await scaffoldComponentInstance(
+      kind === 'cron' ? 'cron_schedule' : 'interval_schedule',
+      project,
+      instanceName,
+      attrs
+    );
+    if (!defsFileUri) return;
+
+    const doc = await vscode.workspace.openTextDocument(defsFileUri);
+    await vscode.window.showTextDocument(doc);
+    vscode.window.showInformationMessage(
+      `Dagster: created schedule "${scheduleName}" -- run "Dagster: Run dg check defs" to validate.`
+    );
+  }
+
   async function promptAndScaffoldSchedule(
     resolver: AssetDefinitionResolver,
     name: string,
     targetArg: string,
     isAsset = false
   ): Promise<void> {
+    const project = getPrimaryProject();
+    const choice = project
+      ? await vscode.window.showQuickPick(
+          [
+            { label: '$(server-process) Cron Schedule (component)', value: 'cron' as const },
+            { label: '$(watch) Interval Schedule (component)', value: 'interval' as const },
+            { label: '$(code) Write Python instead', value: 'python' as const },
+          ],
+          { title: `Add a schedule for ${isAsset ? 'asset' : 'job'} "${name}"` }
+        )
+      : undefined;
+
+    if (choice && choice.value !== 'python') {
+      await scaffoldScheduleComponent(project!, choice.value, name, isAsset);
+      return;
+    }
+    if (project && !choice) return; // QuickPick dismissed
+
     const cron = await vscode.window.showInputBox({
       title: `Add a schedule for ${isAsset ? 'asset' : 'job'} "${name}"`,
       prompt: 'Cron expression',

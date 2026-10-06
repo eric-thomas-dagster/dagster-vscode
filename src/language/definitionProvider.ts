@@ -72,7 +72,13 @@ export class AssetDefinitionResolver implements vscode.Disposable {
     // defs.yaml instance IS the real "definition" for these, so that's
     // the fallback target rather than failing outright.
     if (!found) {
-      const assetNameRe = new RegExp(`asset_name:\\s*["']?${escapeRegExp(identifier)}["']?`);
+      // Same idea, for jobs/schedules defined via a component (e.g.
+      // AssetJobComponent's `job_name:`, CronScheduleComponent's
+      // `schedule_name:`) rather than a plain Python def/assignment --
+      // confirmed real field names via each component's own example.yaml.
+      const assetNameRe = new RegExp(
+        `(?:asset_name|job_name|schedule_name):\\s*["']?${escapeRegExp(identifier)}["']?`
+      );
       const yamlFiles = await vscode.workspace.findFiles(
         '**/defs.yaml',
         '**/{node_modules,.venv,venv,__pycache__,.git,dbt_packages,target}/**',
