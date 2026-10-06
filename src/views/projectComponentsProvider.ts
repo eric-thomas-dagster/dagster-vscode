@@ -7,6 +7,7 @@ import type { DagsterProject } from '../projectDetection';
 import { fetchComponentCatalog } from '../data/componentCatalog';
 import { installComponent, extractClassName, writeComponentInstance } from '../commands/installComponent';
 import { showComponentForm, type FormSpec } from '../webviews/componentFormPanel';
+import { DQ_CHECK_TYPES, buildCheckFormSpec, buildCheckEntryYaml, buildFreshAttributesYaml } from '../data/dataQualityChecks';
 
 /**
  * Sidebar tree of everything the current dev server knows about --
@@ -324,6 +325,28 @@ export function registerProjectComponentsView(
       const assetKey = typeof arg === 'string' ? arg : (arg as AssetTreeItem | undefined)?.info?.key;
       if (!assetKey) return;
 
+      // Offer a real FORM for each of the 19 real, documented check types
+      // of the Enhanced Data Quality Checks component first -- built from
+      // its README's own worked examples, not guessed -- since asking the
+      // model to invent the right fields from a one-line description is
+      // what made this component "hard to set up in YAML" and slow in the
+      // first place. Plain-language description is still available as a
+      // fallback (for dataframe_query_check, which has no documented
+      // example, or anything a form doesn't cover).
+      const typeChoice = await vscode.window.showQuickPick(
+        [
+          ...DQ_CHECK_TYPES.map((t) => ({ label: t.label, description: t.description, checkType: t })),
+          { label: '$(edit) Describe in plain language instead', description: 'Falls back to AI-guessed YAML or raw Python', checkType: undefined },
+        ],
+        { title: `Add a check for "${assetKey}"`, matchOnDescription: true }
+      );
+      if (!typeChoice) return;
+
+      if (typeChoice.checkType) {
+        await addStructuredDataQualityCheck(assetKey, typeChoice.checkType);
+        return;
+      }
+
       const description = await vscode.window.showInputBox({
         title: `Add a check for "${assetKey}"`,
         prompt: 'Describe the check in plain language',
@@ -481,6 +504,70 @@ export function registerProjectComponentsView(
       return undefined;
     }
     return writeComponentInstance(component, project, instanceName, attributesYaml);
+  }
+
+  /** The form-driven twin of the plain-language addAssetCheck path: the
+   * check's exact fields are already known (no AI guess needed for the
+   * structure), so an existing component file just needs the entry
+   * SPLICED in at the right nested key (still AI-mediated, since the
+   * surrounding file structure is arbitrary) and a brand-new instance can
+   * be written out fully deterministically, same trust level as "New
+   * Project"/"Install Component" already use for brand-new files. */
+  async function addStructuredDataQualityCheck(
+    assetKey: string,
+    checkType: (typeof DQ_CHECK_TYPES)[number]
+  ): Promise<void> {
+    const spec = buildCheckFormSpec(checkType);
+    const values = await showComponentForm(spec, []);
+    if (!values) return;
+
+    const missing = spec.fields.filter((f) => f.required && !values[f.name] && values[f.name] !== false);
+    if (missing.length > 0) {
+      vscode.window.showWarningMessage(
+        `Dagster: check not added -- missing required field(s): ${missing.map((f) => f.label).join(', ')}.`
+      );
+      return;
+    }
+
+    const eqcFile = await findExistingComponentFile('EnhancedDataQualityChecks');
+    if (eqcFile) {
+      const entryYaml = buildCheckEntryYaml(checkType, values);
+      const instruction = new vscode.Diagnostic(
+        new vscode.Range(0, 0, 0, 0),
+        `Add this exact data-quality check entry to this Enhanced Data Quality Checks component config, under attributes.assets["${assetKey}"].${checkType.id} (create either or both of that asset key and check-type list if they don't exist yet; if attributes.assets["${assetKey}"].${checkType.id} already exists as a list, APPEND this entry to it rather than replacing the list). Use these exact field values verbatim -- do not change, add, or remove any fields from this entry:\n${entryYaml}\nDon't remove or duplicate any other existing checks or assets in this file.`,
+        vscode.DiagnosticSeverity.Hint
+      );
+      await vscode.commands.executeCommand('dagsterPowerUser.fixDiagnosticWithAi', eqcFile, instruction, true);
+      return;
+    }
+
+    const project = getPrimaryProject();
+    if (!project) {
+      vscode.window.showWarningMessage('Dagster: no Dagster project detected to install the component into.');
+      return;
+    }
+    const choice = await vscode.window.showInformationMessage(
+      'Dagster: no data-quality-check component installed in this project yet.',
+      'Install Enhanced Data Quality Checks'
+    );
+    if (choice !== 'Install Enhanced Data Quality Checks') return;
+
+    const attrsYaml = buildFreshAttributesYaml(assetKey, checkType, values);
+    let instanceName = assetKey
+      .toLowerCase()
+      .replace(/[^a-z0-9_]/g, '_')
+      .replace(/^_+/, '');
+    if (!/^[a-z]/.test(instanceName)) instanceName = `q_${instanceName}`;
+    instanceName = `${instanceName || 'asset'}_quality_checks`;
+
+    const defsFileUri = await scaffoldComponentInstance('enhanced_data_quality_checks', project, instanceName, attrsYaml);
+    if (!defsFileUri) return;
+
+    const doc = await vscode.workspace.openTextDocument(defsFileUri);
+    await vscode.window.showTextDocument(doc);
+    vscode.window.showInformationMessage(
+      `Dagster: added "${checkType.label}" check for "${assetKey}" -- run "Dagster: Run dg check defs" to validate.`
+    );
   }
 
   function yamlTagsBlock(raw: string): string {
