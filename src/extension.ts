@@ -404,14 +404,7 @@ export async function activate(context: vscode.ExtensionContext) {
     // instead of the sidebar's single-conversation view + QuickPick
     // history, for when the cramped sidebar isn't enough room.
     vscode.commands.registerCommand('dagsterPowerUser.openChatPanel', () => {
-      showDagsterExpertChatPanel(
-        context,
-        assetIndexStore,
-        primitiveIndexStore,
-        sessionManager,
-        activeTargetStore,
-        () => !!getPrimaryProject()
-      );
+      showDagsterExpertChatPanel(context, assetIndexStore, primitiveIndexStore, sessionManager);
     })
   );
   context.subscriptions.push(

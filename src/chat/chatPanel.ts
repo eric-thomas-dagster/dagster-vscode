@@ -3,11 +3,9 @@ import { askDagsterExpert } from '../ai/dagsterExpert';
 import { hasApiKey, setApiKey } from '../ai/llmClient';
 import type { AssetIndexStore } from '../data/assetIndex';
 import type { PrimitiveIndexStore } from '../data/primitiveIndex';
-import { SessionManager, sessionListMessage } from './sessionManager';
-import { getDagsterPlusUsageSummary, type DagsterPlusUsageSummary } from '../data/dagsterPlusClient';
-import { type ActiveTargetStore, describeTarget, pickTarget } from '../data/activeTarget';
-import { CHAT_SHARED_CSS, renderChatBodyHtml } from './chatStyles';
-import { QUICK_ACTIONS, MORE_ACTIONS_COMMAND } from './chatViewProvider';
+import type { SessionManager } from './sessionManager';
+import { sessionListMessage } from './sessionManager';
+import { CHAT_SHARED_CSS, renderMinimalChatBodyHtml } from './chatStyles';
 
 let currentPanel: vscode.WebviewPanel | undefined;
 
@@ -18,26 +16,25 @@ function getNonce(): string {
   return text;
 }
 
-/** The same Dagster Expert chat as the sidebar view, but as an editor
- * TAB with a visible session-list rail down the left (Claude.ai's own
- * layout) instead of the sidebar's single-conversation view + a QuickPick
- * for history. Shares the sidebar's CSS/body markup and client script
- * (media/chatView.js) wholesale -- only the rail and its thin wrapper
- * layout are new; everything else (quick actions, bubbles, target tabs,
- * Dagster+ usage) behaves identically in both. Singleton, like the asset
- * lineage panel: reveals the existing tab instead of spawning a second. */
+/** Just the chat, in an editor tab, with a visible session-list rail down
+ * the left (Claude.ai's own layout) instead of the sidebar's single-
+ * conversation view + a QuickPick for history. Deliberately NOT a mirror
+ * of the sidebar's full feature set -- no quick-action buttons, no Local/
+ * Remote target switch, no Dagster+ usage bar; those stay exclusive to
+ * the sidebar view (per explicit feedback: "not the full panel in a tab
+ * -- just the chat"). Shares the sidebar's CSS and client script (media/
+ * chatView.js) wholesale; only the rail + its message/conversation area
+ * are new. Singleton, like the asset lineage panel: reveals the existing
+ * tab instead of spawning a second. */
 export class DagsterExpertChatPanel {
   private readonly panel: vscode.WebviewPanel;
-  private plusUsage: DagsterPlusUsageSummary | undefined;
   private readonly disposables: vscode.Disposable[] = [];
 
   private constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly store: AssetIndexStore,
     private readonly primitives: PrimitiveIndexStore,
-    private readonly sessions: SessionManager,
-    private readonly activeTarget: ActiveTargetStore,
-    private readonly hasLocalProject: () => boolean
+    private readonly sessions: SessionManager
   ) {
     const mediaRoot = vscode.Uri.joinPath(this.context.extensionUri, 'media');
     this.panel = vscode.window.createWebviewPanel(
@@ -50,7 +47,6 @@ export class DagsterExpertChatPanel {
 
     this.disposables.push(
       this.sessions.onDidChange(() => this.syncState()),
-      this.activeTarget.onDidChange(() => this.syncState()),
       this.panel.webview.onDidReceiveMessage((m) => this.onMessage(m)),
       this.panel.onDidDispose(() => this.dispose())
     );
@@ -60,15 +56,13 @@ export class DagsterExpertChatPanel {
     context: vscode.ExtensionContext,
     store: AssetIndexStore,
     primitives: PrimitiveIndexStore,
-    sessions: SessionManager,
-    activeTarget: ActiveTargetStore,
-    hasLocalProject: () => boolean
+    sessions: SessionManager
   ): void {
     if (currentPanel) {
       currentPanel.reveal();
       return;
     }
-    const instance = new DagsterExpertChatPanel(context, store, primitives, sessions, activeTarget, hasLocalProject);
+    const instance = new DagsterExpertChatPanel(context, store, primitives, sessions);
     currentPanel = instance.panel;
   }
 
@@ -80,40 +74,16 @@ export class DagsterExpertChatPanel {
   private syncState(): void {
     const session = this.sessions.getActiveSession();
     void this.panel.webview.postMessage({ type: 'loadHistory', title: session.title, messages: session.messages });
-    void this.panel.webview.postMessage({
-      type: 'target',
-      isLocal: this.activeTarget.get().kind === 'local',
-      label: describeTarget(this.activeTarget.get()),
-    });
     void this.panel.webview.postMessage(sessionListMessage(this.sessions.listSessions(), session.id));
-    if (this.plusUsage) {
-      void this.panel.webview.postMessage({ type: 'plusUsage', summary: this.plusUsage });
-    }
-  }
-
-  private async refreshPlusUsage(): Promise<void> {
-    this.plusUsage = await getDagsterPlusUsageSummary(this.context);
-    void this.panel.webview.postMessage({ type: 'plusUsage', summary: this.plusUsage });
   }
 
   private async onMessage(message: {
     type: string;
     question?: string;
-    command?: string;
-    to?: 'local' | 'remote';
     id?: string;
     archived?: boolean;
   }): Promise<void> {
     const webview = this.panel.webview;
-    if (message.type === 'switchTarget') {
-      if (message.to === 'local') {
-        await this.activeTarget.set({ kind: 'local' });
-      } else {
-        const picked = await pickTarget(this.context, this.hasLocalProject());
-        if (picked) await this.activeTarget.set(picked);
-      }
-      return;
-    }
     if (message.type === 'switchSession' && message.id) {
       await this.sessions.switchTo(message.id);
       return;
@@ -140,24 +110,12 @@ export class DagsterExpertChatPanel {
       const ok = await hasApiKey(this.context);
       void webview.postMessage({ type: ok ? 'ready' : 'needsKey' });
       this.syncState();
-      void this.refreshPlusUsage();
       return;
     }
     if (message.type === 'setKey') {
       await setApiKey(this.context, 'anthropic');
       const ok = await hasApiKey(this.context);
       void webview.postMessage({ type: ok ? 'ready' : 'needsKey' });
-      return;
-    }
-    if (message.type === 'runCommand' && message.command) {
-      await vscode.commands.executeCommand(message.command);
-      if (message.command !== MORE_ACTIONS_COMMAND) {
-        const action = QUICK_ACTIONS.find((a) => a.command === message.command);
-        void webview.postMessage({ type: 'commandRan', label: action?.label ?? message.command });
-      } else {
-        void this.refreshPlusUsage();
-      }
-      this.syncState();
       return;
     }
     if (message.type === 'ask' && message.question) {
@@ -180,11 +138,6 @@ export class DagsterExpertChatPanel {
     const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(mediaRoot, 'chatView.js'));
     const codiconCssUri = webview.asWebviewUri(vscode.Uri.joinPath(mediaRoot, 'codicons', 'codicon.css'));
     const csp = `default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src ${webview.cspSource} 'nonce-${nonce}'; font-src ${webview.cspSource};`;
-    const actionButtons = QUICK_ACTIONS.map(
-      (a) =>
-        `<button class="quick-action" data-run-command="${a.command}" title="${a.label}">` +
-        `<i class="codicon codicon-${a.icon}"></i><span>${a.label}</span></button>`
-    ).join('');
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -271,7 +224,7 @@ ${CHAT_SHARED_CSS}
       <button id="rail-new-btn"><i class="codicon codicon-add"></i>New Chat</button>
       <div id="rail-list"></div>
     </div>
-    <div id="main">${renderChatBodyHtml(actionButtons)}
+    <div id="main">${renderMinimalChatBodyHtml()}
     </div>
   </div>
   <script nonce="${nonce}" src="${scriptUri}"></script>
@@ -284,9 +237,7 @@ export function showDagsterExpertChatPanel(
   context: vscode.ExtensionContext,
   store: AssetIndexStore,
   primitives: PrimitiveIndexStore,
-  sessions: SessionManager,
-  activeTarget: ActiveTargetStore,
-  hasLocalProject: () => boolean
+  sessions: SessionManager
 ): void {
-  DagsterExpertChatPanel.showOrReveal(context, store, primitives, sessions, activeTarget, hasLocalProject);
+  DagsterExpertChatPanel.showOrReveal(context, store, primitives, sessions);
 }

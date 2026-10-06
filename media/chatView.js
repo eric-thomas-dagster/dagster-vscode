@@ -88,12 +88,16 @@
     vscode.postMessage({ type: 'setKey' });
   });
 
-  targetLocalEl.addEventListener('click', () => {
-    vscode.postMessage({ type: 'switchTarget', to: 'local' });
-  });
-  targetRemoteEl.addEventListener('click', () => {
-    vscode.postMessage({ type: 'switchTarget', to: 'remote' });
-  });
+  // Not present in the editor-tab panel's minimal HTML (no target switch
+  // there) -- guarded the same way the rail elements are for the sidebar.
+  if (targetLocalEl && targetRemoteEl) {
+    targetLocalEl.addEventListener('click', () => {
+      vscode.postMessage({ type: 'switchTarget', to: 'local' });
+    });
+    targetRemoteEl.addEventListener('click', () => {
+      vscode.postMessage({ type: 'switchTarget', to: 'remote' });
+    });
+  }
 
   function renderTarget(isLocal, label) {
     targetLocalEl.classList.toggle('active', isLocal);

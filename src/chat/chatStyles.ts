@@ -199,11 +199,12 @@ export const CHAT_SHARED_CSS = `
     }
 `;
 
-/** The chat body markup shared by both hosts -- target tabs, session
- * header, Dagster+ usage, quick actions, message list, key banner, input
- * row. Identical in both; only what WRAPS it (plain <body> for the
- * sidebar, a #main column next to the session rail for the tab) differs. */
-export function renderChatBodyHtml(actionButtonsHtml: string): string {
+/** The full chat body -- target tabs, session header, Dagster+ usage,
+ * quick actions, message list, key banner, input row. Used by the
+ * sidebar view only; the editor-tab panel uses the minimal variant below
+ * instead (its own session rail already covers what the extra chrome here
+ * was for). */
+export function renderFullChatBodyHtml(actionButtonsHtml: string): string {
   return `
   <div id="target-tabs">
     <button class="target-tab" id="target-local" title="Run against your local dev server">Local</button>
@@ -231,6 +232,27 @@ export function renderChatBodyHtml(actionButtonsHtml: string): string {
   <div id="messages">
     <div class="system-note">Ask Dagster Expert about this project's assets, groups, and kinds -- or use a button above.</div>
   </div>
+  ${renderKeyBannerAndInputHtml()}`;
+}
+
+/** Just the chat itself -- session title, message list, key banner,
+ * input row. No quick actions, no Local/Remote target switch, no
+ * Dagster+ usage bar -- those stay exclusive to the sidebar's "let this
+ * panel do everything" view. Used by the editor-tab panel, whose own
+ * session rail already replaces the sidebar's QuickPick-based history. */
+export function renderMinimalChatBodyHtml(): string {
+  return `
+  <div id="session-header">
+    <span id="session-title">New session</span>
+  </div>
+  <div id="messages">
+    <div class="system-note">Ask Dagster Expert about this project's assets, groups, and kinds.</div>
+  </div>
+  ${renderKeyBannerAndInputHtml()}`;
+}
+
+function renderKeyBannerAndInputHtml(): string {
+  return `
   <div id="key-banner">
     <div class="system-note">Set an Anthropic API key to start chatting.</div>
     <button id="set-key-btn">Set API Key</button>

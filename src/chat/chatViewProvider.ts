@@ -6,7 +6,7 @@ import type { PrimitiveIndexStore } from '../data/primitiveIndex';
 import type { SessionManager } from './sessionManager';
 import { getDagsterPlusUsageSummary, type DagsterPlusUsageSummary } from '../data/dagsterPlusClient';
 import { type ActiveTargetStore, describeTarget, pickTarget } from '../data/activeTarget';
-import { CHAT_SHARED_CSS, renderChatBodyHtml } from './chatStyles';
+import { CHAT_SHARED_CSS, renderFullChatBodyHtml } from './chatStyles';
 import { sessionListMessage } from './sessionManager';
 
 function getNonce(): string {
@@ -231,7 +231,7 @@ export class DagsterExpertChatViewProvider implements vscode.WebviewViewProvider
 ${CHAT_SHARED_CSS}
   </style>
 </head>
-<body>${renderChatBodyHtml(actionButtons)}
+<body>${renderFullChatBodyHtml(actionButtons)}
   <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;
